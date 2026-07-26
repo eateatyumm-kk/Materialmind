@@ -1,0 +1,5 @@
+
+
+# MaterialMind API version used
+Name: mp-api
+Version: 0.46.4
