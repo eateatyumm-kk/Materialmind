@@ -1,0 +1,75 @@
+_wandb:
+    value:
+        cli_version: 0.28.2
+        e:
+            1ybwhkfyny5q8gzkq7q6t5fb49rb9sn4:
+                apple:
+                    ecpuCores: 4
+                    gpuCores: 7
+                    macModel: MacBookAir10,1
+                    memoryGb: 8
+                    name: Apple M1
+                    pcpuCores: 4
+                    ramTotalBytes: "8589934592"
+                    swapTotalBytes: "17179869184"
+                codePath: Testing/material_practice.py
+                codePathLocal: Testing/material_practice.py
+                cpu_count: 8
+                cpu_count_logical: 8
+                disk:
+                    /:
+                        total: "245107195904"
+                        used: "203653308416"
+                email: 88koshiro.i@gmail.com
+                executable: /Users/koshiro/Projects - ML/MaterialMind/.venv/bin/python
+                git:
+                    commit: 0e9df049aec88958ef6dbbc8c32494dcf6b669f8
+                    remote: https://github.com/eateatyumm-kk/Materialmind.git
+                host: Koshiros-MacBook-Air.local
+                memory:
+                    total: "8589934592"
+                os: macOS-26.6.1-arm64-arm-64bit-Mach-O
+                program: /Users/koshiro/Projects - ML/MaterialMind/Testing/material_practice.py
+                python: CPython 3.14.6
+                root: /Users/koshiro/Projects - ML/MaterialMind
+                startedAt: "2026-08-24T07:11:30.935706Z"
+                writerId: 1ybwhkfyny5q8gzkq7q6t5fb49rb9sn4
+        m: []
+        python_version: 3.14.6
+        t:
+            "1":
+                - 1
+                - 53
+                - 77
+                - 105
+            "2":
+                - 1
+                - 53
+                - 77
+                - 105
+            "3":
+                - 16
+            "4": 3.14.6
+            "5": 0.28.2
+            "12": 0.28.2
+            "13": darwin-arm64
+architecture:
+    value: GCN
+batch_size:
+    value: 32
+cutoff_radius:
+    value: 5
+dataset:
+    value: MaterialsProject_BulkModulus
+dropout:
+    value: 0.2
+epochs:
+    value: 200
+hidden_dim_1:
+    value: 64
+hidden_dim_2:
+    value: 32
+learning_rate:
+    value: 0.0003
+patience:
+    value: 30

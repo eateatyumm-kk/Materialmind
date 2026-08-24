@@ -1,0 +1,38 @@
+{
+  "os":  "macOS-26.6.1-arm64-arm-64bit-Mach-O",
+  "python":  "CPython 3.14.6",
+  "startedAt":  "2026-08-24T07:11:30.935706Z",
+  "program":  "/Users/koshiro/Projects - ML/MaterialMind/Testing/material_practice.py",
+  "codePath":  "Testing/material_practice.py",
+  "codePathLocal":  "Testing/material_practice.py",
+  "git":  {
+    "remote":  "https://github.com/eateatyumm-kk/Materialmind.git",
+    "commit":  "0e9df049aec88958ef6dbbc8c32494dcf6b669f8"
+  },
+  "email":  "88koshiro.i@gmail.com",
+  "root":  "/Users/koshiro/Projects - ML/MaterialMind",
+  "host":  "Koshiros-MacBook-Air.local",
+  "executable":  "/Users/koshiro/Projects - ML/MaterialMind/.venv/bin/python",
+  "cpu_count":  8,
+  "cpu_count_logical":  8,
+  "disk":  {
+    "/":  {
+      "total":  "245107195904",
+      "used":  "203653308416"
+    }
+  },
+  "memory":  {
+    "total":  "8589934592"
+  },
+  "apple":  {
+    "name":  "Apple M1",
+    "ecpuCores":  4,
+    "pcpuCores":  4,
+    "gpuCores":  7,
+    "memoryGb":  8,
+    "swapTotalBytes":  "17179869184",
+    "ramTotalBytes":  "8589934592",
+    "macModel":  "MacBookAir10,1"
+  },
+  "writerId":  "1ybwhkfyny5q8gzkq7q6t5fb49rb9sn4"
+}
