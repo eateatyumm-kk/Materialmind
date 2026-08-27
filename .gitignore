@@ -1,5 +1,15 @@
+# Environments & Secrets
 .env
 .venv/
+venv/
+
+# Python & Caches
 __pycache__/
-.vscode
+
+# IDEs & System Files
+.vscode/
 .DS_Store
+
+# Weights & Biases
+wandb/
+*.wandb
