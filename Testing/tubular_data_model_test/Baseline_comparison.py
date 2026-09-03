@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.inspection import permutation_importance
 from pathlib import Path
+from xgboost import XGBRegressor
 
 # --------- Splitting the data into train/test/val and prepare two datasets ------
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -70,6 +71,9 @@ models = {
     ]),
     "4. Gradient Boosting (Hist)": Pipeline([
         ('model', HistGradientBoostingRegressor(learning_rate=0.1, random_state=42))
+    ]),
+    "5. XGBoost": Pipeline([
+        ('model', XGBRegressor(objective='reg:squarederror', n_jobs=-1, random_state=42))
     ])
 }
 
