@@ -19,6 +19,8 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def find_project_root(marker="data"):
@@ -168,6 +170,28 @@ def main():
     metrics_df = pd.DataFrame(metrics_rows)
     metrics_df.to_csv(RESULTS_DIR / "tabular_test_metrics.csv", index=False)
     print(f"\nSaved predictions and metrics to {RESULTS_DIR}")
+
+    plt.figure(figsize=(12, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.scatter(y_test_arr, y_pred, alpha=0.5, color='teal', edgecolors='k', linewidth=0.5)
+    plt.plot([y_test_arr.min(), y_test_arr.max()], [y_test_arr.min(), y_test_arr.max()], 'r--', lw=2, label='Ideal (1:1)')
+    plt.xlabel('Actual Log Bulk Modulus', fontsize=11)
+    plt.ylabel('Predicted Log Bulk Modulus', fontsize=11)
+    plt.title('Predicted vs. Actual', fontsize=12, fontweight='bold')
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.6)
+
+    plt.subplot(1, 2, 2)
+    sns.histplot(y_test_arr - y_pred, kde=True, color='crimson', bins=30)
+    plt.axvline(x=0, color='black', linestyle='--', linewidth=1.5)
+    plt.xlabel('Residual Error (Actual - Predicted)', fontsize=11)
+    plt.ylabel('Material Count', fontsize=11)
+    plt.title('Error Distribution', fontsize=12, fontweight='bold')
+    plt.grid(True, linestyle='--', alpha=0.6)
+
+    plt.tight_layout()
+    plt.show()
 
     return model, metrics_df
 
