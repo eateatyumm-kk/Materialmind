@@ -2,6 +2,11 @@
 
 This module evaluates baseline machine learning models on engineered material properties to predict Bulk Modulus ($\text{VRH}$). The goal is to establish strong tabular benchmarks before comparing performance against Graph Neural Network (GNN) architectures.
 
+Baseline_comparison.py : aim to find better dataset combination and model (linear regression, XGboost, Gradient Boosting (Hist), Random Forest)
+
+hyperparameter_tuning.py : find good hyperparameter combination using wandb
+
+Hist_test.py : testing the hist model with test dataset.
 ---
 
 ## Dataset & Split Strategy
@@ -66,3 +71,6 @@ wandb: n_estimators_used 271
 wandb:           val_mae 0.05425
 wandb:            val_r2 0.92983
 wandb:          val_rmse 0.09366
+
+===================test result=====================
+
