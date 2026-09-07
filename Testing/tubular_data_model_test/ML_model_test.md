@@ -74,3 +74,11 @@ wandb:          val_rmse 0.09366
 
 ===================test result=====================
 
+=== FINAL TEST SET PERFORMANCE (log10 GPa) — HistGB comp+density ===
+Test RMSE: 0.0879
+Test MAE:  0.0556
+Test R²:   0.9358
+
+=== LOW-K SUBSET (K < 3.0 GPa, log10(K) < 0.4771) ===
+Low-K subset (n=3): MAE=0.1365, RMSE=0.2162
+K >= 3 GPa subset (n=748): MAE=0.0553, RMSE=0.0870
