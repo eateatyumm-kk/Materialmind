@@ -72,6 +72,21 @@ wandb:           val_mae 0.05425
 wandb:            val_r2 0.92983
 wandb:          val_rmse 0.09366
 
+
+
+better model: 
+
+    learning_rate=0.18823,
+    l2_regularization=0.0029355,
+    max_depth=3,
+    max_iter=500,
+    max_leaf_nodes=15,
+    min_samples_leaf=5,
+    random_state=42,
+    early_stopping=True,
+    validation_fraction=0.15,
+    n_iter_no_change=15,
+
 ===================test result=====================
 
 === FINAL TEST SET PERFORMANCE (log10 GPa) — HistGB comp+density ===
@@ -82,3 +97,17 @@ Test R²:   0.9358
 === LOW-K SUBSET (K < 3.0 GPa, log10(K) < 0.4771) ===
 Low-K subset (n=3): MAE=0.1365, RMSE=0.2162
 K >= 3 GPa subset (n=748): MAE=0.0553, RMSE=0.0870
+
+
+with better model:
+
+=== FINAL TEST SET PERFORMANCE (log10 GPa) — HistGB comp+density ===
+Test RMSE: 0.0828
+Test MAE:  0.0538
+Test R²:   0.9430
+
+=== LOW-K SUBSET (K < 3.0 GPa, log10(K) < 0.4771) ===
+Low-K subset (n=3): MAE=0.1219, RMSE=0.1775
+K >= 3 GPa subset (n=748): MAE=0.0536, RMSE=0.0822
+
+

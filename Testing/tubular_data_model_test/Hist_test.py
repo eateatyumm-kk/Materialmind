@@ -44,12 +44,12 @@ LOW_K_THRESHOLD_LOG = np.log10(LOW_K_THRESHOLD_GPA)
 
 # --- Winning config from the W&B sweep report: ethereal-sweep-20 ---
 BEST_PARAMS = dict(
-    learning_rate=0.26225955885339747,
-    l2_regularization=0.0027333622120007876,
+    learning_rate=0.18823,
+    l2_regularization=0.0029355,
     max_depth=3,
     max_iter=500,
-    max_leaf_nodes=63,
-    min_samples_leaf=50,
+    max_leaf_nodes=15,
+    min_samples_leaf=5,
     random_state=42,
     early_stopping=True,
     validation_fraction=0.15,

@@ -14,22 +14,40 @@ SPLIT_DIR.mkdir(exist_ok=True)
 
 SEED = 42
 
+# Explicit physical fallbacks for noble gases (Group 18)
+NOBLE_GAS_FALLBACKS = {
+    "He": {"X": 0.0, "r": 1.40, "ie": 24.5874, "group": 18},
+    "Ne": {"X": 0.0, "r": 1.54, "ie": 21.5645, "group": 18},
+    "Ar": {"X": 0.0, "r": 1.88, "ie": 15.7596, "group": 18},
+    "Kr": {"X": 0.0, "r": 2.02, "ie": 13.9996, "group": 18},
+    "Xe": {"X": 0.0, "r": 2.16, "ie": 12.1298, "group": 18},
+    "Rn": {"X": 0.0, "r": 2.20, "ie": 10.7485, "group": 18},
+}
+
 
 def structure_to_graph_knn(structure, target: float, material_id: str, impute_stats: dict, k: int = 12) -> Data:
     node_features = []
-    
     coordination_numbers = [len(neighbors) for neighbors in structure.get_all_neighbors(r=3.0)]
 
     for i, site in enumerate(structure):
         elem = site.specie
-        
+        symbol = elem.symbol
         z = elem.Z
-        x_electroneg = elem.X if (elem.X is not None and not np.isnan(elem.X)) else impute_stats["median_X"]
-        r_atomic = elem.atomic_radius if (elem.atomic_radius is not None and not np.isnan(elem.atomic_radius)) else impute_stats["median_r"]
-        ie = elem.ionization_energy if (elem.ionization_energy is not None and not np.isnan(elem.ionization_energy)) else impute_stats["median_ie"]
-        group = elem.group if (elem.group is not None and not np.isnan(elem.group)) else impute_stats["median_group"]
-        coord_num = float(coordination_numbers[i])
 
+        # Noble gas physical override vs dataset median fallback
+        if symbol in NOBLE_GAS_FALLBACKS:
+            fb = NOBLE_GAS_FALLBACKS[symbol]
+            x_electroneg = fb["X"]
+            r_atomic = fb["r"]
+            ie = fb["ie"]
+            group = fb["group"]
+        else:
+            x_electroneg = elem.X if (elem.X is not None and not np.isnan(elem.X)) else impute_stats["median_X"]
+            r_atomic = elem.atomic_radius if (elem.atomic_radius is not None and not np.isnan(elem.atomic_radius)) else impute_stats["median_r"]
+            ie = elem.ionization_energy if (elem.ionization_energy is not None and not np.isnan(elem.ionization_energy)) else impute_stats["median_ie"]
+            group = elem.group if (elem.group is not None and not np.isnan(elem.group)) else impute_stats["median_group"]
+
+        coord_num = float(coordination_numbers[i])
         node_features.append([z, x_electroneg, r_atomic, ie, group, coord_num])
 
     x = torch.tensor(node_features, dtype=torch.float)
@@ -90,11 +108,9 @@ def main():
     df_kept = pd.DataFrame(kept_rows)
     torch.save(graphs, DATA_DIR / "graphs.pt")
 
-    # Fix: Ensure no NaN values exist in the 'formula' column
-    # Method A: Fill NaN formulas with the material_id (so they get treated as unique groups)
     df_kept["formula"] = df_kept["formula"].fillna(df_kept["material_id"]).astype(str)
 
-    # Group Split by Chemical Formula
+    # Group Split by Chemical Formula (70/15/15)
     gss_train = GroupShuffleSplit(n_splits=1, train_size=0.70, random_state=SEED)
     train_idx, val_test_idx = next(gss_train.split(df_kept, groups=df_kept["formula"]))
 

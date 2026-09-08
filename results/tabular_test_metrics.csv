@@ -1,4 +1,0 @@
-model,feature_set,subset,n,rmse,mae,r2
-HistGB,comp_plus_density,overall,751,0.08792302386810123,0.05557524662892697,0.9357864955900052
-HistGB,comp_plus_density,low_K_(<3.0GPa),3,0.2162490191514239,0.1365495583561119,
-HistGB,comp_plus_density,high_K_(>=3.0GPa),748,0.08702820197103849,0.05525048334659869,
