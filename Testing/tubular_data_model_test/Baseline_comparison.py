@@ -17,9 +17,18 @@ from xgboost import XGBRegressor
 # --------- Splitting the data into train/test/val and prepare two datasets ------
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-# Load files reliably
-df = pd.read_csv(PROJECT_ROOT / "data" / "tabular_features.csv")
+# 1. Load tabular features AND target labels
+df_features = pd.read_csv(PROJECT_ROOT / "data" / "tabular_features.csv")
+df_targets = pd.read_csv(PROJECT_ROOT / "data" / "targets.csv")
 
+# Compute log target dynamically if not already saved in targets.csv
+if "log_bulk_modulus_vrh" not in df_targets.columns:
+    df_targets["log_bulk_modulus_vrh"] = np.log10(df_targets["bulk_modulus_vrh"])
+
+# Merge features and target on material_id
+df = pd.merge(df_features, df_targets[["material_id", "log_bulk_modulus_vrh"]], on="material_id", how="inner")
+
+# Load splits
 test_ids = pd.read_csv(PROJECT_ROOT / "data" / "splits" / "test_ids.csv")["material_id"]
 train_ids = pd.read_csv(PROJECT_ROOT / "data" / "splits" / "train_ids.csv")["material_id"]
 val_ids = pd.read_csv(PROJECT_ROOT / "data" / "splits" / "val_ids.csv")["material_id"]

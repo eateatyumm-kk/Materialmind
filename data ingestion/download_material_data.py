@@ -1,5 +1,3 @@
-#Initial code to download the master material bulkmodulus data and structural data with material id
-
 import os
 import pickle
 from pathlib import Path
@@ -20,10 +18,7 @@ def download_material_data(num_chunks: int = 5, chunk_size: int = 1000):
         raise ValueError("API_KEY not found in .env")
 
     with MPRester(api_key) as mpr:
-        # Pull material_id and structure in the SAME query as the target,
-        # so there is no second lookup that can pick a different polymorph.
         materials = mpr.materials.summary.search(
-            is_stable=True,
             has_props=["elasticity"],
             fields=["material_id", "formula_pretty", "bulk_modulus", "structure"],
             chunk_size=chunk_size,
@@ -61,8 +56,4 @@ def download_material_data(num_chunks: int = 5, chunk_size: int = 1000):
 
 
 if __name__ == "__main__":
-    df, structures = download_material_data()
-    print(df.head())
-    print(f"Unique formulas: {df['formula'].nunique()} / {len(df)} rows "
-          f"(if these differ, you have polymorphs — that's fine now, "
-          f"since we key by material_id, not formula)")
+    download_material_data()

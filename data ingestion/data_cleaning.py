@@ -1,4 +1,3 @@
-
 import pickle
 from pathlib import Path
 
@@ -8,67 +7,49 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
-NOBLE_GASES = {"He", "Ne", "Ar", "Kr", "Xe", "Rn"}
-
 
 def diagnose_and_clean():
     master = pd.read_csv(DATA_DIR / "materials_master.csv")
     with open(DATA_DIR / "structures.pkl", "rb") as f:
         structures = pickle.load(f)
 
-    bad_electroneg_ids = []
-    bad_radius_ids = []
-    noble_gas_ids = []
+    all_X, all_r, all_ie, all_group = [], [], [], []
 
-    for mat_id, structure in structures.items():
-        elements_here = {site.specie.symbol for site in structure}
-
-        has_noble_gas = bool(elements_here & NOBLE_GASES)
-        if has_noble_gas:
-            noble_gas_ids.append(mat_id)
-
+    for structure in structures.values():
         for site in structure:
             elem = site.specie
-            x = elem.X
-            r = elem.atomic_radius
-            if x is None or (isinstance(x, float) and np.isnan(x)):
-                bad_electroneg_ids.append(mat_id)
-                break
-        for site in structure:
-            elem = site.specie
-            r = elem.atomic_radius
-            if r is None or (isinstance(r, float) and np.isnan(r)):
-                bad_radius_ids.append(mat_id)
-                break
+            if elem.X is not None and not np.isnan(elem.X):
+                all_X.append(elem.X)
+            if elem.atomic_radius is not None and not np.isnan(elem.atomic_radius):
+                all_r.append(elem.atomic_radius)
+            if elem.ionization_energy is not None and not np.isnan(elem.ionization_energy):
+                all_ie.append(elem.ionization_energy)
+            if elem.group is not None and not np.isnan(elem.group):
+                all_group.append(elem.group)
 
-    bad_electroneg_ids = set(bad_electroneg_ids)
-    bad_radius_ids = set(bad_radius_ids)
-    noble_gas_ids = set(noble_gas_ids)
+    # Calculate dataset medians
+    impute_stats = {
+        "median_X": float(np.median(all_X)),
+        "median_r": float(np.median(all_r)),
+        "median_ie": float(np.median(all_ie)),
+        "median_group": float(np.median(all_group)),
+    }
 
-    to_drop = bad_electroneg_ids | bad_radius_ids
+    # Save imputation stats to disk for downstream graph generation
+    with open(DATA_DIR / "impute_stats.pkl", "wb") as f:
+        pickle.dump(impute_stats, f)
 
-    print(f"Total materials: {len(structures)}")
-    print(f"Contain a noble gas element: {len(noble_gas_ids)}")
-    print(f"Have undefined electronegativity on some atom: {len(bad_electroneg_ids)}")
-    print(f"Have undefined atomic_radius on some atom: {len(bad_radius_ids)}")
-    print(f"Total materials to drop (union of both issues): {len(to_drop)}")
+    valid_ids = {k for k, v in structures.items() if v is not None and len(v) > 0}
 
-    if to_drop:
-        print("\nExample dropped material_ids:", list(to_drop)[:10])
-
-    # --- Clean and overwrite ---
-    kept_ids = set(structures.keys()) - to_drop
-
-    master_clean = master[master["material_id"].isin(kept_ids)].reset_index(drop=True)
-    structures_clean = {k: v for k, v in structures.items() if k in kept_ids}
+    master_clean = master[master["material_id"].isin(valid_ids)].reset_index(drop=True)
+    structures_clean = {k: v for k, v in structures.items() if k in valid_ids}
 
     master_clean.to_csv(DATA_DIR / "materials_master.csv", index=False)
     with open(DATA_DIR / "structures.pkl", "wb") as f:
         pickle.dump(structures_clean, f)
 
-    print(f"\nKept {len(kept_ids)} / {len(structures)} materials.")
-    print("Overwrote materials_master.csv and structures.pkl with cleaned versions.")
-    print("Now re-run: featurize_tabular_fixed.py and build_graphs_and_splits.py")
+    print(f"Dataset cleaned. Kept {len(structures_clean)} materials.")
+    print("Saved median imputation stats to impute_stats.pkl")
 
 
 if __name__ == "__main__":

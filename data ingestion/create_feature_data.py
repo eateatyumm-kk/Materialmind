@@ -1,5 +1,3 @@
-#second code after running download_material_data.py 
-
 import pickle
 from pathlib import Path
 
@@ -16,18 +14,14 @@ def main():
     with open(DATA_DIR / "structures.pkl", "rb") as f:
         structures = pickle.load(f)
 
-    # Attach structure objects by material_id (not formula)
     master["structure"] = master["material_id"].map(structures)
     master = master[master["structure"].notna()].reset_index(drop=True)
 
     master["composition"] = master["structure"].apply(lambda s: s.composition)
 
-    # Composition-based (Magpie) features
     ep = ElementProperty.from_preset(preset_name="magpie")
     df_feat = ep.featurize_dataframe(master, col_id="composition", ignore_errors=True)
 
-    # A couple of cheap structural descriptors, since we have the Structure
-    # object anyway and pure-composition features can't see packing/density.
     df_struct = DensityFeatures()
     df_feat = df_struct.featurize_dataframe(df_feat, col_id="structure", ignore_errors=True)
 
@@ -42,8 +36,7 @@ def main():
     X.to_csv(DATA_DIR / "tabular_features.csv", index=False)
     y.to_csv(DATA_DIR / "targets.csv", index=False)
 
-    print(f"Done. Features: {X.shape[0]} rows x {X.shape[1]-1} columns "
-          f"(material_id preserved for joining).")
+    print(f"Tabular features generated: {X.shape[0]} rows x {X.shape[1]-1} columns.")
 
 
 if __name__ == "__main__":
