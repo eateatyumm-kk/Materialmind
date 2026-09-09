@@ -1,0 +1,2 @@
+model,feature_set,split,rmse,mae,r2
+GAT-TransformerConv,graph,test,0.09978892935404492,0.05793897435069084,0.9311562776565552

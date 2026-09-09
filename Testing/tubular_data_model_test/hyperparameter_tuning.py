@@ -7,17 +7,25 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "data"
 
-df = pd.read_csv(PROJECT_ROOT / "data" / "tabular_features.csv")
+# 1. Load tabular features AND target labels
+df_features = pd.read_csv(PROJECT_ROOT / "data" / "tabular_features.csv")
+df_targets = pd.read_csv(PROJECT_ROOT / "data" / "targets.csv")
 
-train_ids = set(pd.read_csv(DATA_DIR / "splits" / "train_ids.csv")["material_id"])
-val_ids = set(pd.read_csv(DATA_DIR / "splits" / "val_ids.csv")["material_id"])
+# Compute log target dynamically if not already saved in targets.csv
+if "log_bulk_modulus_vrh" not in df_targets.columns:
+    df_targets["log_bulk_modulus_vrh"] = np.log10(df_targets["bulk_modulus_vrh"])
+
+# Merge features and target on material_id
+df = pd.merge(df_features, df_targets[["material_id", "log_bulk_modulus_vrh"]], on="material_id", how="inner")
+
+train_ids = set(pd.read_csv(PROJECT_ROOT / "data" / "splits" / "train_ids.csv")["material_id"])
+val_ids = set(pd.read_csv(PROJECT_ROOT / "data" / "splits" / "val_ids.csv")["material_id"])
 
 magpie_cols = [c for c in df.columns if c.startswith("MagpieData")]
 density_cols = [
     c for c in df.columns
-    if c not in magpie_cols and c not in ("material_id", "log_bulk_modulus_vrh")
+    if c not in magpie_cols and c not in ("material_id", "log_bulk_modulus_vrh", "energy_above_hull")
 ]
 feature_cols = magpie_cols + density_cols
 
@@ -107,7 +115,7 @@ if __name__ == "__main__":
     sweep_id = wandb.sweep(
         sweep=sweep_config,
         entity="88-eateatyumm-imperial-college-london",
-        project="MaterialMind_ML",
+        project="MaterialMind_histgb_sweep",
     )
 
-    wandb.agent(sweep_id, function=train, count=35)
+    wandb.agent(sweep_id, function=train, count=20)

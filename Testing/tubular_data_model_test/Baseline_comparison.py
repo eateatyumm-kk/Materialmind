@@ -37,7 +37,7 @@ val_ids = pd.read_csv(PROJECT_ROOT / "data" / "splits" / "val_ids.csv")["materia
 magpie_cols = [c for c in df.columns if c.startswith("MagpieData")]
 density_cols = [
     c for c in df.columns 
-    if c not in magpie_cols and c not in ("material_id", "log_bulk_modulus_vrh")
+    if c not in magpie_cols and c not in ("material_id", "log_bulk_modulus_vrh", "energy_above_hull")
 ]
 comp_den_cols = magpie_cols + density_cols
 
@@ -76,13 +76,13 @@ models = {
         ('model', Ridge(alpha=1.0))
     ]),
     "3. Random Forest": Pipeline([
-        ('model', RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1))
+        ('model', RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=1))
     ]),
     "4. Gradient Boosting (Hist)": Pipeline([
         ('model', HistGradientBoostingRegressor(learning_rate=0.1, random_state=42))
     ]),
     "5. XGBoost": Pipeline([
-        ('model', XGBRegressor(objective='reg:squarederror', n_jobs=-1, random_state=42))
+        ('model', XGBRegressor(objective='reg:squarederror', n_jobs=1, random_state=42))
     ])
 }
 
@@ -97,7 +97,7 @@ def baseline(dataset_type="comp"):
         X_train, y_train = X_train_subset_comp_den, y_train_subset_comp_den
 
     for name, pipeline in models.items():
-        cv_scores = cross_validate(pipeline, X_train, y_train, cv=5, scoring=metrics, n_jobs=-1)
+        cv_scores = cross_validate(pipeline, X_train, y_train, cv=5, scoring=metrics, n_jobs=1)
         
         rmse = -cv_scores['test_neg_root_mean_squared_error'].mean()
         mae = -cv_scores['test_neg_mean_absolute_error'].mean()

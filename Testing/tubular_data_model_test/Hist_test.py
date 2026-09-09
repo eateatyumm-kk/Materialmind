@@ -44,12 +44,12 @@ LOW_K_THRESHOLD_LOG = np.log10(LOW_K_THRESHOLD_GPA)
 
 # --- Winning config from the W&B sweep report: ethereal-sweep-20 ---
 BEST_PARAMS = dict(
-    learning_rate=0.18823,
-    l2_regularization=0.0029355,
+    learning_rate=0.12074849061070954,
+    l2_regularization=0.032350973806895354,
     max_depth=3,
     max_iter=500,
     max_leaf_nodes=15,
-    min_samples_leaf=5,
+    min_samples_leaf=20,
     random_state=42,
     early_stopping=True,
     validation_fraction=0.15,
@@ -57,10 +57,18 @@ BEST_PARAMS = dict(
 )
 
 def load_data():
-    df = pd.read_csv(DATA_DIR / "tabular_features.csv")
+    df_features = pd.read_csv(PROJECT_ROOT / "data" / "tabular_features.csv")
+    df_targets = pd.read_csv(PROJECT_ROOT / "data" / "targets.csv")
 
-    train_ids = set(pd.read_csv(DATA_DIR / "splits" / "train_ids.csv")["material_id"])
-    test_ids = set(pd.read_csv(DATA_DIR / "splits" / "test_ids.csv")["material_id"])
+    # Compute log target dynamically if not already saved in targets.csv
+    if "log_bulk_modulus_vrh" not in df_targets.columns:
+        df_targets["log_bulk_modulus_vrh"] = np.log10(df_targets["bulk_modulus_vrh"])
+
+    # Merge features and target on material_id
+    df = pd.merge(df_features, df_targets[["material_id", "log_bulk_modulus_vrh"]], on="material_id", how="inner")
+
+    train_ids = set(pd.read_csv(PROJECT_ROOT / "data" / "splits" / "train_ids.csv")["material_id"])
+    test_ids = set(pd.read_csv(PROJECT_ROOT / "data" / "splits" / "test_ids.csv")["material_id"])
 
     magpie_cols = [c for c in df.columns if c.startswith("MagpieData")]
     # Defensive: exclude anything target-like by pattern, not just exact

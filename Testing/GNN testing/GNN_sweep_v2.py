@@ -31,37 +31,37 @@ from torch_geometric.nn import TransformerConv, global_mean_pool
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
-
 # ============================================================
 # 1. Model
 # ============================================================
+
+class GaussianRBF(nn.Module):
+    def __init__(self, start=0.0, stop=8.0, num_gaussians=16):
+        super().__init__()
+        self.offset = torch.linspace(start, stop, num_gaussians)
+        self.coeff = -0.5 / ((stop - start) / num_gaussians) ** 2
+
+    def forward(self, dist):
+        # Expands scalar distances into continuous Gaussian functions
+        return torch.exp(self.coeff * (dist - self.offset.to(dist.device)) ** 2)
+
 class GATBulkModulus(nn.Module):
-    def __init__(self, config, in_node_dim=6, edge_dim=2):
+    def __init__(self, config, in_node_dim=6, in_edge_dim=2):
         super().__init__()
         self.num_heads = config.num_heads
         hidden = config.hidden_dim
+        
+        # 1. Expand raw distance into 16 Gaussian channels
+        self.rbf = GaussianRBF(start=0.0, stop=8.0, num_gaussians=16)
+        rbf_edge_dim = 16 if in_edge_dim == 1 else in_edge_dim
 
-        # Project raw node features (Z, electronegativity, radius) up to
-        # hidden_dim before attention — TransformerConv wants in==out
-        # channels to match for the residual add to work cleanly.
         self.node_embed = nn.Linear(in_node_dim, hidden)
 
-        # TransformerConv splits `hidden` across `num_heads` internally when
-        # concat=False is not set; here we keep concat=True per layer and
-        # project back down, which is the more standard multi-head pattern
-        # and gives the attention heads room to specialize.
-        self.conv1 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
-        self.conv2 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
-        self.conv3 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
+        # 2. Convolutions using explicit head sizing
+        head_dim = hidden // self.num_heads
+        self.conv1 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
+        self.conv2 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
+        self.conv3 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
 
         self.norm1 = nn.LayerNorm(hidden)
         self.norm2 = nn.LayerNorm(hidden)
@@ -69,26 +69,23 @@ class GATBulkModulus(nn.Module):
 
         self.dropout = nn.Dropout(p=config.dropout)
 
-        # Regression head, operating on the pooled graph embedding
         self.fc1 = nn.Linear(hidden, config.fc_hidden)
         self.fc2 = nn.Linear(config.fc_hidden, config.fc_hidden // 2)
         self.fc_out = nn.Linear(config.fc_hidden // 2, 1)
 
     def _graph_embedding(self, data):
-        """Everything up to and including pooling — shared by forward()
-        and extract_embedding(), so there's exactly one code path that can
-        drift out of sync between training and embedding extraction."""
         x, edge_index, edge_attr, batch = (
             data.x.float(), data.edge_index, data.edge_attr.float(), data.batch
         )
 
+        # Expand distances if scalar edge attribute
+        if edge_attr.dim() == 1 or edge_attr.size(1) == 1:
+            edge_attr = self.rbf(edge_attr.squeeze())
+
         x = F.relu(self.node_embed(x))
         x = self.dropout(x)
 
-        # Residual attention blocks: x = x + Attn(x), then norm.
-        # Residuals matter more here than in plain GCN — without them,
-        # stacking attention layers tends to over-smooth node features
-        # toward a single averaged representation.
+        # Residual Blocks
         h = self.conv1(x, edge_index, edge_attr)
         x = self.norm1(x + F.relu(h))
         x = self.dropout(x)
@@ -100,8 +97,7 @@ class GATBulkModulus(nn.Module):
         h = self.conv3(x, edge_index, edge_attr)
         x = self.norm3(x + F.relu(h))
 
-        graph_embedding = global_mean_pool(x, batch)
-        return graph_embedding
+        return global_mean_pool(x, batch)
 
     def forward(self, data):
         graph_embedding = self._graph_embedding(data)
@@ -235,7 +231,7 @@ def train():
         in_node_dim = train_graphs[0].x.size(1)
         edge_dim = train_graphs[0].edge_attr.size(1)
 
-        model = GATBulkModulus(config, in_node_dim=in_node_dim, edge_dim=edge_dim).to(device)
+        model = GATBulkModulus(config, in_node_dim=in_node_dim, in_edge_dim=edge_dim).to(device)
         optimizer = optim.Adam(model.parameters(), lr=config.learning_rate,
                                 weight_decay=config.weight_decay)
         criterion = nn.MSELoss()
@@ -286,6 +282,6 @@ if __name__ == "__main__":
     sweep_id = wandb.sweep(
         sweep=sweep_config,
         entity="88-eateatyumm-imperial-college-london",
-        project="MaterialMind_GNN",
+        project="MaterialMind_GNN_v2",
     )
-    wandb.agent(sweep_id, function=train, count=40)
+    wandb.agent(sweep_id, function=train, count=25)

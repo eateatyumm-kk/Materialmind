@@ -39,29 +39,22 @@ def find_project_root(marker="data"):
         current = current.parent
     raise FileNotFoundError(f"Could not find a '{marker}' directory above {__file__}")
 
-
 PROJECT_ROOT = find_project_root()
 DATA_DIR = PROJECT_ROOT / "data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
-# ============================================================
-# 1. Winning config from the sweep report (cosmic-sweep-5)
-#    Picked because it wins best_val_loss (0.1200) AND is second-best on
-#    MAE (0.0820, close behind devout-sweep-4's 0.0767), with the smallest
-#    model and shortest runtime of any leading candidate.
-# ============================================================
 class Config:
-    learning_rate = 0.0025575
-    batch_size = 16
-    hidden_dim = 32
+    learning_rate = 0.0002299
+    batch_size = 64
+    hidden_dim = 128
     fc_hidden = 32
     num_heads = 8
     dropout = 0.0
-    attn_dropout = 0.2
-    weight_decay = 0.000022451
+    attn_dropout = 0.1
+    weight_decay = 0.000010194
     epochs = 300
-    patience = 40  # slightly relaxed from the sweep's 30, given the
+    patience = 30  # slightly relaxed from the sweep's 30, given the
                    # confirmed noisy-but-still-improving val loss pattern
 
 
@@ -69,30 +62,36 @@ config = Config()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-
 # ============================================================
 # 2. Model (identical architecture to the sweep script)
 # ============================================================
+class GaussianRBF(nn.Module):
+    def __init__(self, start=0.0, stop=8.0, num_gaussians=16):
+        super().__init__()
+        self.offset = torch.linspace(start, stop, num_gaussians)
+        self.coeff = -0.5 / ((stop - start) / num_gaussians) ** 2
+
+    def forward(self, dist):
+        # Expands scalar distances into continuous Gaussian functions
+        return torch.exp(self.coeff * (dist - self.offset.to(dist.device)) ** 2)
+
 class GATBulkModulus(nn.Module):
-    def __init__(self, config, in_node_dim=3, edge_dim=1):
+    def __init__(self, config, in_node_dim=6, in_edge_dim=2):
         super().__init__()
         self.num_heads = config.num_heads
         hidden = config.hidden_dim
+        
+        # 1. Expand raw distance into 16 Gaussian channels
+        self.rbf = GaussianRBF(start=0.0, stop=8.0, num_gaussians=16)
+        rbf_edge_dim = 16 if in_edge_dim == 1 else in_edge_dim
 
         self.node_embed = nn.Linear(in_node_dim, hidden)
 
-        self.conv1 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
-        self.conv2 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
-        self.conv3 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
+        # 2. Convolutions using explicit head sizing
+        head_dim = hidden // self.num_heads
+        self.conv1 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
+        self.conv2 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
+        self.conv3 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
 
         self.norm1 = nn.LayerNorm(hidden)
         self.norm2 = nn.LayerNorm(hidden)
@@ -109,9 +108,14 @@ class GATBulkModulus(nn.Module):
             data.x.float(), data.edge_index, data.edge_attr.float(), data.batch
         )
 
+        # Expand distances if scalar edge attribute
+        if edge_attr.dim() == 1 or edge_attr.size(1) == 1:
+            edge_attr = self.rbf(edge_attr.squeeze())
+
         x = F.relu(self.node_embed(x))
         x = self.dropout(x)
 
+        # Residual Blocks
         h = self.conv1(x, edge_index, edge_attr)
         x = self.norm1(x + F.relu(h))
         x = self.dropout(x)
@@ -123,18 +127,23 @@ class GATBulkModulus(nn.Module):
         h = self.conv3(x, edge_index, edge_attr)
         x = self.norm3(x + F.relu(h))
 
-        graph_embedding = global_mean_pool(x, batch)
-        return graph_embedding
+        return global_mean_pool(x, batch)
 
     def forward(self, data):
         graph_embedding = self._graph_embedding(data)
+
         h = F.relu(self.fc1(graph_embedding))
         h = self.dropout(h)
         h = F.relu(self.fc2(h))
-        return self.fc_out(h).view(-1)
+        out = self.fc_out(h).view(-1)
+        return out
 
     @torch.no_grad()
     def extract_embedding(self, data):
+        """Returns the pooled graph representation (post-attention,
+        pre-regression-head) as a fixed-length vector per structure.
+        This is the feature the hybrid model concatenates with tabular
+        features before feeding XGBoost."""
         self.eval()
         return self._graph_embedding(data)
 
@@ -216,7 +225,7 @@ def train_final_model():
     in_node_dim = train_graphs[0].x.size(1)
     edge_dim = train_graphs[0].edge_attr.size(1)
 
-    model = GATBulkModulus(config, in_node_dim=in_node_dim, edge_dim=edge_dim).to(device)
+    model = GATBulkModulus(config, in_node_dim=in_node_dim, in_edge_dim=edge_dim).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate,
                             weight_decay=config.weight_decay)
     criterion = nn.MSELoss()
