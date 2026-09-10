@@ -80,7 +80,7 @@ def load_data():
         if c not in magpie_cols
         and c not in (["material_id"] + target_like)
     ]
-    feature_cols = magpie_cols + density_cols
+    feature_cols = density_cols
 
     train_df = df[df["material_id"].isin(train_ids)].reset_index(drop=True)
     test_df = df[df["material_id"].isin(test_ids)].reset_index(drop=True)

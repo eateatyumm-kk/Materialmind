@@ -42,7 +42,7 @@ BEST_PARAMS = dict(
 )
 
 def load_data():
-    df = pd.read_csv(DATA_DIR / "tabular_features.csv")
+    df = pd.read_csv(DATA_DIR / "materials_master.csv")
     df = df[["material_id", "log_bulk_modulus_vrh"]]
     emb = pd.read_csv(DATA_DIR / "gnn_embeddings.csv")
     df = df.merge(emb, on="material_id", how="left") 
