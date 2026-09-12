@@ -28,9 +28,6 @@ def download_material_data(num_chunks: int = 10, chunk_size: int = 1000):
                 "bulk_modulus",
                 "structure",
                 "energy_above_hull",
-                "density",
-                "volume",
-                "nelements",
             ],
             chunk_size=chunk_size,
             num_chunks=num_chunks,
@@ -63,10 +60,6 @@ def download_material_data(num_chunks: int = 10, chunk_size: int = 1000):
             continue
 
         mat_id = str(m.material_id)
-        
-        # Bug Fix: Guard volume division
-        num_atoms = len(m.structure)
-        vpa = (m.volume / num_atoms) if (m.volume is not None and num_atoms > 0) else None
 
         rows.append({
             "material_id": mat_id,
@@ -113,7 +106,6 @@ def download_material_data(num_chunks: int = 10, chunk_size: int = 1000):
     print(f"\nSaved master CSV to: {master_path}")
     print(f"Saved structures to:  {struct_path}")
     return df, structures
-
 
 if __name__ == "__main__":
     download_material_data(num_chunks=10, chunk_size=1000)

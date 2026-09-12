@@ -10,9 +10,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # 1. Load tabular features AND target labels
 df_features = pd.read_csv(PROJECT_ROOT / "data" / "tabular_features.csv")
-df_targets = pd.read_csv(PROJECT_ROOT / "data" / "targets.csv")
+df_targets = pd.read_csv(PROJECT_ROOT / "data" / "materials_master.csv")
 
-# Compute log target dynamically if not already saved in targets.csv
 if "log_bulk_modulus_vrh" not in df_targets.columns:
     df_targets["log_bulk_modulus_vrh"] = np.log10(df_targets["bulk_modulus_vrh"])
 
@@ -23,11 +22,7 @@ train_ids = set(pd.read_csv(PROJECT_ROOT / "data" / "splits" / "train_ids.csv")[
 val_ids = set(pd.read_csv(PROJECT_ROOT / "data" / "splits" / "val_ids.csv")["material_id"])
 
 magpie_cols = [c for c in df.columns if c.startswith("MagpieData")]
-density_cols = [
-    c for c in df.columns
-    if c not in magpie_cols and c not in ("material_id", "log_bulk_modulus_vrh", "energy_above_hull")
-]
-feature_cols = magpie_cols + density_cols
+feature_cols = magpie_cols
 
 train_df = df[df["material_id"].isin(train_ids)]
 val_df = df[df["material_id"].isin(val_ids)]
@@ -66,13 +61,11 @@ sweep_config = {
             "max": 10.0,
         },
         "feature_set": {
-            "value": "comp_plus_density",
+            "value": "composition_only",
         },
     },
 }
 
-
-# --- 3. Training function ---
 def train():
     with wandb.init() as run:
         config = wandb.config
@@ -109,13 +102,11 @@ def train():
         run.summary["val_mae"] = val_mae
         run.summary["val_r2"] = val_r2
 
-
-# --- 4. Initialize & run sweep agent ---
 if __name__ == "__main__":
     sweep_id = wandb.sweep(
         sweep=sweep_config,
         entity="88-eateatyumm-imperial-college-london",
-        project="MaterialMind_histgb_sweep",
+        project="HistGB_sweep",
     )
 
     wandb.agent(sweep_id, function=train, count=20)

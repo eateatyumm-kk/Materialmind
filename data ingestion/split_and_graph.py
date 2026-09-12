@@ -16,14 +16,13 @@ SEED = 42
 
 # Explicit physical fallbacks for noble gases (Group 18)
 NOBLE_GAS_FALLBACKS = {
-    "He": {"X": 0.0, "r": 1.40, "ie": 24.5874, "group": 18},
-    "Ne": {"X": 0.0, "r": 1.54, "ie": 21.5645, "group": 18},
-    "Ar": {"X": 0.0, "r": 1.88, "ie": 15.7596, "group": 18},
-    "Kr": {"X": 0.0, "r": 2.02, "ie": 13.9996, "group": 18},
-    "Xe": {"X": 0.0, "r": 2.16, "ie": 12.1298, "group": 18},
-    "Rn": {"X": 0.0, "r": 2.20, "ie": 10.7485, "group": 18},
+    "He": {"r": 1.40, "ie": 24.5874, "group": 18},
+    "Ne": {"r": 1.54, "ie": 21.5645, "group": 18},
+    "Ar": {"r": 1.88, "ie": 15.7596, "group": 18},
+    "Kr": {"r": 2.02, "ie": 13.9996, "group": 18},
+    "Xe": {"r": 2.16, "ie": 12.1298, "group": 18},
+    "Rn": {"r": 2.20, "ie": 10.7485, "group": 18},
 }
-
 
 def structure_to_graph_knn(structure, target: float, material_id: str, impute_stats: dict, k: int = 12) -> Data:
     node_features = []
@@ -37,7 +36,7 @@ def structure_to_graph_knn(structure, target: float, material_id: str, impute_st
         # Noble gas physical override vs dataset median fallback
         if symbol in NOBLE_GAS_FALLBACKS:
             fb = NOBLE_GAS_FALLBACKS[symbol]
-            x_electroneg = fb["X"]
+            x_electroneg = impute_stats["median_X"]  # neutral value, not an extreme 0.0
             r_atomic = fb["r"]
             ie = fb["ie"]
             group = fb["group"]

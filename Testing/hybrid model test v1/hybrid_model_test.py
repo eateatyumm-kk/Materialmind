@@ -23,10 +23,23 @@ RESULTS_DIR.mkdir(exist_ok=True)
 LOW_K_THRESHOLD_GPA = 3.0
 LOW_K_THRESHOLD_LOG = np.log10(LOW_K_THRESHOLD_GPA)
 
-BEST_PARAMS = dict(
-    learning_rate=0.12074849061070954,
-    l2_regularization=0.032350973806895354,
-    max_depth=3,
+PCA_BEST_PARAMS = dict(
+    learning_rate=0.05589461485225799,
+    l2_regularization=0.002266953931102471,
+    max_depth=10,
+    max_iter=500,
+    max_leaf_nodes=31,
+    min_samples_leaf=20,
+    random_state=42,
+    early_stopping=True,
+    validation_fraction=0.15,
+    n_iter_no_change=15,
+)
+
+NO_PCA_BEST_PARAMS = dict(
+    learning_rate=0.1086949308007322,
+    l2_regularization=0.0002321764804508835,
+    max_depth=5,
     max_iter=500,
     max_leaf_nodes=15,
     min_samples_leaf=20,
@@ -36,10 +49,10 @@ BEST_PARAMS = dict(
     n_iter_no_change=15,
 )
 
-def load_data():
+def load_data(type=PCA_BEST_PARAMS):
     df_features = pd.read_csv(DATA_DIR / "tabular_features.csv")
     emb = pd.read_csv(DATA_DIR / "gnn_embeddings.csv")
-    df_targets = pd.read_csv(DATA_DIR / "targets.csv")
+    df_targets = pd.read_csv(DATA_DIR / "materials_master.csv")
 
     if "log_bulk_modulus_vrh" not in df_targets.columns:
         df_targets["log_bulk_modulus_vrh"] = np.log10(df_targets["bulk_modulus_vrh"])
@@ -49,39 +62,49 @@ def load_data():
     train_ids = set(pd.read_csv(DATA_DIR / "splits" / "train_ids.csv")["material_id"])
     test_ids = set(pd.read_csv(DATA_DIR / "splits" / "test_ids.csv")["material_id"])
 
-    # Separate train and test embeddings to prevent data leakage
     emb_train = emb[emb["material_id"].isin(train_ids)].reset_index(drop=True)
     emb_test = emb[emb["material_id"].isin(test_ids)].reset_index(drop=True)
 
-    # Fit PCA ONLY on training data
-    pca = PCA(n_components=12)
-    train_pca_feats = pca.fit_transform(emb_train.drop(columns=["material_id"]))
-    test_pca_feats = pca.transform(emb_test.drop(columns=["material_id"]))
+    if type == PCA_BEST_PARAMS:
+        pca = PCA(n_components=48)
+        train_pca_feats = pca.fit_transform(emb_train.drop(columns=["material_id"]))
+        test_pca_feats = pca.transform(emb_test.drop(columns=["material_id"]))
+        cols = [f"gnn_embed_{i+1}" for i in range(48)]
+        emb_train_pca = pd.DataFrame(train_pca_feats, columns=cols)
+        emb_train_pca.insert(0, "material_id", emb_train["material_id"])
 
-    cols = [f"gnn_embed_{i+1}" for i in range(12)]
-    
-    emb_train_pca = pd.DataFrame(train_pca_feats, columns=cols)
-    emb_train_pca.insert(0, "material_id", emb_train["material_id"])
+        emb_test_pca = pd.DataFrame(test_pca_feats, columns=cols)
+        emb_test_pca.insert(0, "material_id", emb_test["material_id"])
+    else:
+        emb_cols = [
+        c for c in emb_train.columns
+        if c.startswith("gnn_embed_")
+        ]
 
-    emb_test_pca = pd.DataFrame(test_pca_feats, columns=cols)
-    emb_test_pca.insert(0, "material_id", emb_test["material_id"])
+        print(f"Raw GNN embedding dimensions: {len(emb_cols)}")
+
+        if len(emb_cols) != 64:
+            raise ValueError(
+                f"Expected 64 GNN embedding columns, "
+                f"found {len(emb_cols)}"
+            )
+
+        emb_train_pca = emb_train[
+            ["material_id"] + emb_cols
+        ].copy()
+
+        emb_test_pca = emb_test[
+            ["material_id"] + emb_cols
+        ].copy()
 
     emb_pca_all = pd.concat([emb_train_pca, emb_test_pca], axis=0, ignore_index=True)
 
-    # Merge embeddings back to main df
     df = df.merge(emb_pca_all, on="material_id", how="left")
 
     magpie_cols = [c for c in df.columns if c.startswith("MagpieData")]
     emb_cols = [c for c in emb_pca_all.columns if c.startswith("gnn_embed")]
 
-    target_like = [c for c in df.columns if "bulk_modulus" in c.lower()]
-    density_cols = [
-        c for c in df.columns
-        if c not in magpie_cols
-        and c not in emb_cols
-        and c not in (["material_id"] + target_like)
-    ]
-    feature_cols = magpie_cols + emb_cols + density_cols
+    feature_cols = magpie_cols + emb_cols
 
     train_df = df[df["material_id"].isin(train_ids)].reset_index(drop=True)
     test_df = df[df["material_id"].isin(test_ids)].reset_index(drop=True)
@@ -92,14 +115,14 @@ def load_data():
     test_ids_ordered = test_df["material_id"]
 
     print(f"Feature set: {len(feature_cols)} columns "
-          f"({len(magpie_cols)} Magpie + {len(emb_cols)} GNN embeddings + {len(density_cols)} density)")
+          f"({len(magpie_cols)} Magpie + {len(emb_cols)} GNN embeddings)")
 
     return X_train, y_train, X_test, y_test, test_ids_ordered, feature_cols
 
-def main():
-    X_train, y_train, X_test, y_test, test_ids_ordered, feature_cols = load_data()
+def main(PARAM = PCA_BEST_PARAMS):
+    X_train, y_train, X_test, y_test, test_ids_ordered, feature_cols = load_data(PARAM)
 
-    model = HistGradientBoostingRegressor(**BEST_PARAMS)
+    model = HistGradientBoostingRegressor(**PARAM)
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
@@ -113,6 +136,14 @@ def main():
     print(f"Test RMSE: {test_rmse:.4f}")
     print(f"Test MAE:  {test_mae:.4f}")
     print(f"Test R²:   {test_r2:.4f}")
+
+    residual = np.abs(y_test_arr - y_pred)
+    error_df = pd.DataFrame({
+        "material_id": test_ids_ordered,
+        "y_true": y_test_arr,
+        "y_pred": y_pred,
+        "residual": residual
+    })
 
     plt.figure(figsize=(12, 5))
 
@@ -136,5 +167,11 @@ def main():
     plt.tight_layout()
     plt.show()
 
+    print("\n===== biggest error =====")
+    worst_errors = error_df.sort_values(by='residual', ascending=False).head(10)
+    worst_errors = pd.merge(worst_errors, pd.read_csv(DATA_DIR / "materials_master.csv"), on="material_id", how="inner")
+    print(worst_errors[["material_id", "y_true", "y_pred", "residual", "formula"]])
+
 if __name__ == "__main__":
-    main()
+    main(PARAM = PCA_BEST_PARAMS)
+    main(PARAM = NO_PCA_BEST_PARAMS)

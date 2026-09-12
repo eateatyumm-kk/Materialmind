@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pandas as pd
 from matminer.featurizers.composition import ElementProperty
-from matminer.featurizers.structure import DensityFeatures
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
@@ -35,9 +34,6 @@ def main():
     ep = ElementProperty.from_preset(preset_name="magpie")
     df_feat = ep.featurize_dataframe(master, col_id="composition", ignore_errors=True)
 
-    df_struct = DensityFeatures()
-    df_feat = df_struct.featurize_dataframe(df_feat, col_id="structure", ignore_errors=True)
-
     # Pattern-based exclusion — catches bulk_modulus_vrh, bulk_modulus_voigt,
     # bulk_modulus_reuss, log_bulk_modulus_vrh, or any future variant,
     # regardless of when this script runs relative to others.
@@ -55,7 +51,6 @@ def main():
     y.to_csv(DATA_DIR / "targets.csv", index=False)
 
     print(f"Tabular features generated: {X.shape[0]} rows x {X.shape[1]-1} columns.")
-
 
 if __name__ == "__main__":
     main()

@@ -1,23 +1,5 @@
-"""
-GAT-style GNN for bulk modulus prediction, using PyG's TransformerConv
-(attention over neighbors, edge-feature-aware — a proper drop-in upgrade
-from the CGConv/CGCNN baseline that still uses interatomic distance).
-
-Key structural differences from the CGCNN baseline script:
-  1. Loads graphs.pt + the SHARED splits (train/val/test by material_id) —
-     no more independent random_split. This is required for a valid
-     comparison against the tabular model and the CGCNN baseline.
-  2. Adds a genuine held-out TEST set, untouched by the sweep.
-  3. Multi-head attention (TransformerConv) instead of CGConv.
-  4. Residual connections between conv layers — attention-based GNNs
-     benefit more from residuals than plain GCNs, since attention can
-     otherwise over-smooth node features across layers.
-  5. extract_embedding() method — returns the pooled graph representation
-     before the final regression head, for the later hybrid model.
-"""
 import os
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import torch
@@ -31,10 +13,6 @@ from torch_geometric.nn import TransformerConv, global_mean_pool
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
-# ============================================================
-# 1. Model
-# ============================================================
-
 class GaussianRBF(nn.Module):
     def __init__(self, start=0.0, stop=8.0, num_gaussians=16):
         super().__init__()
@@ -42,22 +20,23 @@ class GaussianRBF(nn.Module):
         self.coeff = -0.5 / ((stop - start) / num_gaussians) ** 2
 
     def forward(self, dist):
-        # Expands scalar distances into continuous Gaussian functions
-        return torch.exp(self.coeff * (dist - self.offset.to(dist.device)) ** 2)
+        dist = dist.unsqueeze(1)
+
+        return torch.exp(
+            self.coeff * (dist - self.offset.to(dist.device)) ** 2
+        )
 
 class GATBulkModulus(nn.Module):
     def __init__(self, config, in_node_dim=6, in_edge_dim=2):
         super().__init__()
         self.num_heads = config.num_heads
         hidden = config.hidden_dim
-        
-        # 1. Expand raw distance into 16 Gaussian channels
+
         self.rbf = GaussianRBF(start=0.0, stop=8.0, num_gaussians=16)
-        rbf_edge_dim = 16 if in_edge_dim == 1 else in_edge_dim
+        rbf_edge_dim = 17 if in_edge_dim == 2 else in_edge_dim
 
         self.node_embed = nn.Linear(in_node_dim, hidden)
 
-        # 2. Convolutions using explicit head sizing
         head_dim = hidden // self.num_heads
         self.conv1 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
         self.conv2 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
@@ -78,10 +57,15 @@ class GATBulkModulus(nn.Module):
             data.x.float(), data.edge_index, data.edge_attr.float(), data.batch
         )
 
-        # Expand distances if scalar edge attribute
-        if edge_attr.dim() == 1 or edge_attr.size(1) == 1:
-            edge_attr = self.rbf(edge_attr.squeeze())
+        distance = edge_attr[:, 0]
+        other_feature = edge_attr[:, 1]
 
+        rbf_distance = self.rbf(distance)
+
+        edge_attr = torch.cat(
+            [rbf_distance, other_feature.unsqueeze(1)],
+            dim=1)
+        
         x = F.relu(self.node_embed(x))
         x = self.dropout(x)
 
@@ -110,17 +94,9 @@ class GATBulkModulus(nn.Module):
 
     @torch.no_grad()
     def extract_embedding(self, data):
-        """Returns the pooled graph representation (post-attention,
-        pre-regression-head) as a fixed-length vector per structure.
-        This is the feature the hybrid model concatenates with tabular
-        features before feeding XGBoost."""
         self.eval()
         return self._graph_embedding(data)
 
-
-# ============================================================
-# 2. Data loading — SHARED splits, with a real test set
-# ============================================================
 def load_split_graphs():
     graphs = torch.load(DATA_DIR / "graphs.pt", weights_only=False)
 
@@ -137,12 +113,8 @@ def load_split_graphs():
 
     return train_graphs, val_graphs, test_graphs
 
-
 train_graphs, val_graphs, test_graphs = load_split_graphs()
 
-# Normalization stats from TRAIN ONLY (y is already log10(K) from
-# build_graphs_and_splits.py — this z-scores the log target for training
-# stability, same approach as the CGCNN baseline).
 train_y = torch.cat([g.y.view(-1) for g in train_graphs]).float()
 y_mean = train_y.mean()
 y_std = train_y.std()
@@ -150,10 +122,6 @@ y_std = train_y.std()
 for g in train_graphs + val_graphs + test_graphs:
     g.y_scaled = ((g.y.float() - y_mean) / y_std).view(-1)
 
-
-# ============================================================
-# 3. Sweep config
-# ============================================================
 sweep_config = {
     "method": "bayes",
     "metric": {"name": "val_loss", "goal": "minimize"},
@@ -177,10 +145,6 @@ sweep_config = {
     },
 }
 
-
-# ============================================================
-# 4. Training function (sweeps against VAL only — test untouched)
-# ============================================================
 def run_epoch(model, loader, device, criterion, optimizer=None):
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
@@ -218,7 +182,6 @@ def run_epoch(model, loader, device, criterion, optimizer=None):
     if total_n == 0:
         return None, None, skipped_nan
     return total_loss / total_n, total_mae / total_n, skipped_nan
-
 
 def train():
     with wandb.init() as run:
@@ -277,11 +240,10 @@ def train():
             wandb.save(ckpt_path)
             os.remove(ckpt_path)
 
-
 if __name__ == "__main__":
     sweep_id = wandb.sweep(
         sweep=sweep_config,
         entity="88-eateatyumm-imperial-college-london",
-        project="MaterialMind_GNN_v2",
+        project="GAT_sweep",
     )
-    wandb.agent(sweep_id, function=train, count=25)
+    wandb.agent(sweep_id, function=train, count=30)

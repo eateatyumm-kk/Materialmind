@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # 1. Load tabular features AND target labels
 df_features = pd.read_csv(PROJECT_ROOT / "data" / "tabular_features.csv")
-df_targets = pd.read_csv(PROJECT_ROOT / "data" / "targets.csv")
+df_targets = pd.read_csv(PROJECT_ROOT / "data" / "materials_master.csv")
 
 # Compute log target dynamically if not already saved in targets.csv
 if "log_bulk_modulus_vrh" not in df_targets.columns:
@@ -35,11 +35,6 @@ val_ids = pd.read_csv(PROJECT_ROOT / "data" / "splits" / "val_ids.csv")["materia
 
 # 2. Define column groups
 magpie_cols = [c for c in df.columns if c.startswith("MagpieData")]
-density_cols = [
-    c for c in df.columns 
-    if c not in magpie_cols and c not in ("material_id", "log_bulk_modulus_vrh", "energy_above_hull")
-]
-comp_den_cols = magpie_cols + density_cols
 
 # 3. Split the main dataframe first using sets for faster lookup
 train_df = df[df["material_id"].isin(set(train_ids))]
@@ -55,16 +50,6 @@ y_val_subset_comp = val_df["log_bulk_modulus_vrh"]
 
 X_test_subset_comp = test_df[magpie_cols]
 y_test_subset_comp = test_df["log_bulk_modulus_vrh"]
-
-# --------- Data with composition and density ----
-X_train_subset_comp_den = train_df[comp_den_cols]
-y_train_subset_comp_den = train_df["log_bulk_modulus_vrh"]
-
-X_val_subset_comp_den = val_df[comp_den_cols]
-y_val_subset_comp_den = val_df["log_bulk_modulus_vrh"]
-
-X_test_subset_comp_den = test_df[comp_den_cols]
-y_test_subset_comp_den = test_df["log_bulk_modulus_vrh"]
 
 # -------- Pipelines for ML models ----------
 models = {
@@ -93,8 +78,6 @@ def baseline(dataset_type="comp"):
 
     if dataset_type == "comp":
         X_train, y_train = X_train_subset_comp, y_train_subset_comp
-    elif dataset_type == "comp_den":
-        X_train, y_train = X_train_subset_comp_den, y_train_subset_comp_den
 
     for name, pipeline in models.items():
         cv_scores = cross_validate(pipeline, X_train, y_train, cv=5, scoring=metrics, n_jobs=1)
@@ -116,11 +99,9 @@ def baseline(dataset_type="comp"):
 # -------- Model evaluation and plotting ------
 def result_analysis():
     comp_result = baseline(dataset_type="comp")
-    comp_den_result = baseline(dataset_type="comp_den")
     
     # FIXED: Capitalized 'Model', fixed idmax -> idxmax, corrected dataframe references
     comp_best_model = str(comp_result.loc[comp_result['CV R²'].idxmax(), "Model"])
-    comp_den_model = str(comp_den_result.loc[comp_den_result['CV R²'].idxmax(), "Model"])
 
     def model_eval(model_name, dataset_type="comp"):
         best_pipeline = models[model_name]
@@ -128,9 +109,6 @@ def result_analysis():
         if dataset_type == "comp":
             X_train, y_train = X_train_subset_comp, y_train_subset_comp
             X_val, y_val = X_val_subset_comp, y_val_subset_comp
-        elif dataset_type == "comp_den":
-            X_train, y_train = X_train_subset_comp_den, y_train_subset_comp_den
-            X_val, y_val = X_val_subset_comp_den, y_val_subset_comp_den
 
         best_pipeline.fit(X_train, y_train)
         y_pred = best_pipeline.predict(X_val)
@@ -184,13 +162,6 @@ def result_analysis():
 
     error = model_eval(comp_best_model, dataset_type="comp")
     graph(error, title_suffix="Composition Only")
-
-    # ------- Printing Composition + Density Results --------
-    print("\n=== Composition + Structure Baseline Comparison ===")
-    print(comp_den_result.to_string(index=False))
-
-    error_den = model_eval(comp_den_model, dataset_type="comp_den")
-    graph(error_den, title_suffix="Comp + Density")
 
 if __name__ == "__main__":
     result_analysis()
