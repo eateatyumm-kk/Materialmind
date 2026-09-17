@@ -62,6 +62,20 @@ Each crystal structure is represented as a graph:
   - Interatomic distance
   - Bond ratio
 
+## Model
+
+### Tabular Baseline: 
+HistGradientBoosting Regressor (HistGB) trained exclusively on Magpie features (selected after benchmarking against Random Forest and XGBoost). 
+
+### GNN Model: 
+Graph Attention Network (GAT) capturing directional and structural atomic interactions via multi-head attention. 
+
+<img width="465" height="712" alt="スクリーンショット 2026-09-15 104946" src="https://github.com/user-attachments/assets/9793dcd2-4401-45ae-b950-e2583a110a0d" />
+
+### Hybrid Model: 
+A late-fusion approach concatenating frozen GNN graph embeddings with Magpie tabular features, fed directly into a HistGB regressor.
+
+<img width="643" height="527" alt="スクリーンショット 2026-09-15 123823" src="https://github.com/user-attachments/assets/15040c1e-e080-43b1-993a-b8ac979aa3cf" />
 
 
 
