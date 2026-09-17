@@ -70,16 +70,35 @@ HistGradientBoosting Regressor (HistGB) trained exclusively on Magpie features (
 ### GNN Model: 
 Graph Attention Network (GAT) capturing directional and structural atomic interactions via multi-head attention. 
 
-<img width="465" height="712" alt="スクリーンショット 2026-09-15 104946" src="https://github.com/user-attachments/assets/9793dcd2-4401-45ae-b950-e2583a110a0d" />
+<p align="center">
+  <img width="465" height="712" alt="スクリーンショット 2026-09-15 104946" src="https://github.com/user-attachments/assets/9793dcd2-4401-45ae-b950-e2583a110a0d" />
+</p>
 
 ### Hybrid Model: 
 A late-fusion approach concatenating frozen GNN graph embeddings with Magpie tabular features, fed directly into a HistGB regressor.
 
-<img width="643" height="527" alt="スクリーンショット 2026-09-15 123823" src="https://github.com/user-attachments/assets/15040c1e-e080-43b1-993a-b8ac979aa3cf" />
+<p align="center">
+  <img width="643" height="527" alt="スクリーンショット 2026-09-15 123823" src="https://github.com/user-attachments/assets/15040c1e-e080-43b1-993a-b8ac979aa3cf" />
+</p>
 
+## Result Plot
 
-
-
+<table>
+  <tr>
+    <td align="center">
+      <b>Magpi Tubular Data (HistGB)</b><br>
+      <img width="400" alt="Final_materialmind_HistGB_test" src="https://github.com/user-attachments/assets/f9e922a2-1dd5-442b-98ce-1d1894e58612" />
+    </td>
+    <td align="center">
+      <b>GNN (GAT)</b><br>
+      <img width="400" alt="Final_materialmind_GNN_test" src="https://github.com/user-attachments/assets/1db6bdbe-1f04-4861-9c88-c1535ea6ebc9" />
+    </td>
+    <td align="center">
+      <b>Hybrid (Frozen GNN embedding + tubular data through HistGB)</b><br>
+      <img width="400" alt="Final_materialmind_Hybrid_test" src="https://github.com/user-attachments/assets/7c45d386-5447-4c81-a7cd-3a0d35d78c20" />
+    </td>
+  </tr>
+</table>
 
 
 
