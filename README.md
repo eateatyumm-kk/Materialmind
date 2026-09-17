@@ -100,6 +100,50 @@ A late-fusion approach concatenating frozen GNN graph embeddings with Magpie tab
   </tr>
 </table>
 
+## Result Table
 
+### 1. Overall Performance Across Seeds (Mean ± Std)
+
+| Model | RMSE (Mean) | RMSE (Std) | MAE (Mean) | MAE (Std) | R2 (Mean) | R2 (Std) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **GNN** | 0.101292 | 0.003779 | 0.060661 | 0.002698 | 0.928988 | 0.005259 |
+| **Magpie** | 0.130382 | 0.001122 | 0.077400 | 0.001561 | 0.882467 | 0.002030 |
+| **raw Hybrid** | 0.101953 | 0.002787 | 0.057978 | 0.001691 | 0.928094 | 0.003941 |
+
+---
+
+### 2. Paired GNN vs Hybrid R2 Comparison (n = 5 seeds)
+
+| Seed | GNN R2 | Hybrid R2 | Diff (Hybrid - GNN) |
+| :---: | :---: | :---: | :---: |
+| **42** | 0.926648 | 0.932056 | 0.005408 |
+| **123** | 0.935578 | 0.927418 | -0.008160 |
+| **456** | 0.924251 | 0.922591 | -0.001660 |
+| **789** | 0.933656 | 0.926631 | -0.007025 |
+| **2024** | 0.924807 | 0.931775 | 0.006968 |
+
+> **Statistical Test Summary**
+> * **Mean R2 Diff (Hybrid - GNN):** -0.0009 (std: 0.0062)
+> * **Paired t-test:** t = -0.288, p = 0.7876
+> * **Conclusion:** **NOT statistically significant** at alpha = 0.05. More seeds are needed to draw a confident conclusion.
+
+---
+
+### 3. Subgroup Analysis (Mean Across Seeds)
+
+| Model | Subgroup | MAE | RMSE | Count |
+| :--- | :--- | :---: | :---: | :---: |
+| **GNN** | `bottom_20pct_lowK` | 0.109324 | 0.172406 | 298.0 |
+| | `extreme_low_K_(<3.0GPa)` | 0.452363 | 0.560878 | 5.0 |
+| | `middle_60pct` | 0.053309 | 0.079867 | 892.0 |
+| | `top_20pct_highK` | 0.034005 | 0.047744 | 298.0 |
+| **Magpie** | `bottom_20pct_lowK` | 0.144663 | 0.225607 | 298.0 |
+| | `extreme_low_K_(<3.0GPa)` | 0.593106 | 0.664448 | 5.0 |
+| | `middle_60pct` | 0.060317 | 0.088725 | 892.0 |
+| | `top_20pct_highK` | 0.061274 | 0.101879 | 298.0 |
+| **raw Hybrid** | `bottom_20pct_lowK` | 0.107778 | 0.179017 | 298.0 |
+| | `extreme_low_K_(<3.0GPa)` | 0.568495 | 0.653917 | 5.0 |
+| | `middle_60pct` | 0.049149 | 0.076478 | 892.0 |
+| | `top_20pct_highK` | 0.034606 | 0.048189 | 298.0 |
 
 
