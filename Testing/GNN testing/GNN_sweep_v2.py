@@ -1,23 +1,5 @@
-"""
-GAT-style GNN for bulk modulus prediction, using PyG's TransformerConv
-(attention over neighbors, edge-feature-aware — a proper drop-in upgrade
-from the CGConv/CGCNN baseline that still uses interatomic distance).
-
-Key structural differences from the CGCNN baseline script:
-  1. Loads graphs.pt + the SHARED splits (train/val/test by material_id) —
-     no more independent random_split. This is required for a valid
-     comparison against the tabular model and the CGCNN baseline.
-  2. Adds a genuine held-out TEST set, untouched by the sweep.
-  3. Multi-head attention (TransformerConv) instead of CGConv.
-  4. Residual connections between conv layers — attention-based GNNs
-     benefit more from residuals than plain GCNs, since attention can
-     otherwise over-smooth node features across layers.
-  5. extract_embedding() method — returns the pooled graph representation
-     before the final regression head, for the later hybrid model.
-"""
 import os
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import torch
@@ -31,37 +13,34 @@ from torch_geometric.nn import TransformerConv, global_mean_pool
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
+class GaussianRBF(nn.Module):
+    def __init__(self, start=0.0, stop=8.0, num_gaussians=16):
+        super().__init__()
+        self.offset = torch.linspace(start, stop, num_gaussians)
+        self.coeff = -0.5 / ((stop - start) / num_gaussians) ** 2
 
-# ============================================================
-# 1. Model
-# ============================================================
+    def forward(self, dist):
+        dist = dist.unsqueeze(1)
+
+        return torch.exp(
+            self.coeff * (dist - self.offset.to(dist.device)) ** 2
+        )
+
 class GATBulkModulus(nn.Module):
-    def __init__(self, config, in_node_dim=3, edge_dim=1):
+    def __init__(self, config, in_node_dim=6, in_edge_dim=2):
         super().__init__()
         self.num_heads = config.num_heads
         hidden = config.hidden_dim
 
-        # Project raw node features (Z, electronegativity, radius) up to
-        # hidden_dim before attention — TransformerConv wants in==out
-        # channels to match for the residual add to work cleanly.
+        self.rbf = GaussianRBF(start=0.0, stop=8.0, num_gaussians=16)
+        rbf_edge_dim = 17 if in_edge_dim == 2 else in_edge_dim
+
         self.node_embed = nn.Linear(in_node_dim, hidden)
 
-        # TransformerConv splits `hidden` across `num_heads` internally when
-        # concat=False is not set; here we keep concat=True per layer and
-        # project back down, which is the more standard multi-head pattern
-        # and gives the attention heads room to specialize.
-        self.conv1 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
-        self.conv2 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
-        self.conv3 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
+        head_dim = hidden // self.num_heads
+        self.conv1 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
+        self.conv2 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
+        self.conv3 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
 
         self.norm1 = nn.LayerNorm(hidden)
         self.norm2 = nn.LayerNorm(hidden)
@@ -69,26 +48,28 @@ class GATBulkModulus(nn.Module):
 
         self.dropout = nn.Dropout(p=config.dropout)
 
-        # Regression head, operating on the pooled graph embedding
         self.fc1 = nn.Linear(hidden, config.fc_hidden)
         self.fc2 = nn.Linear(config.fc_hidden, config.fc_hidden // 2)
         self.fc_out = nn.Linear(config.fc_hidden // 2, 1)
 
     def _graph_embedding(self, data):
-        """Everything up to and including pooling — shared by forward()
-        and extract_embedding(), so there's exactly one code path that can
-        drift out of sync between training and embedding extraction."""
         x, edge_index, edge_attr, batch = (
             data.x.float(), data.edge_index, data.edge_attr.float(), data.batch
         )
 
+        distance = edge_attr[:, 0]
+        other_feature = edge_attr[:, 1]
+
+        rbf_distance = self.rbf(distance)
+
+        edge_attr = torch.cat(
+            [rbf_distance, other_feature.unsqueeze(1)],
+            dim=1)
+        
         x = F.relu(self.node_embed(x))
         x = self.dropout(x)
 
-        # Residual attention blocks: x = x + Attn(x), then norm.
-        # Residuals matter more here than in plain GCN — without them,
-        # stacking attention layers tends to over-smooth node features
-        # toward a single averaged representation.
+        # Residual Blocks
         h = self.conv1(x, edge_index, edge_attr)
         x = self.norm1(x + F.relu(h))
         x = self.dropout(x)
@@ -100,8 +81,7 @@ class GATBulkModulus(nn.Module):
         h = self.conv3(x, edge_index, edge_attr)
         x = self.norm3(x + F.relu(h))
 
-        graph_embedding = global_mean_pool(x, batch)
-        return graph_embedding
+        return global_mean_pool(x, batch)
 
     def forward(self, data):
         graph_embedding = self._graph_embedding(data)
@@ -114,17 +94,9 @@ class GATBulkModulus(nn.Module):
 
     @torch.no_grad()
     def extract_embedding(self, data):
-        """Returns the pooled graph representation (post-attention,
-        pre-regression-head) as a fixed-length vector per structure.
-        This is the feature the hybrid model concatenates with tabular
-        features before feeding XGBoost."""
         self.eval()
         return self._graph_embedding(data)
 
-
-# ============================================================
-# 2. Data loading — SHARED splits, with a real test set
-# ============================================================
 def load_split_graphs():
     graphs = torch.load(DATA_DIR / "graphs.pt", weights_only=False)
 
@@ -141,12 +113,8 @@ def load_split_graphs():
 
     return train_graphs, val_graphs, test_graphs
 
-
 train_graphs, val_graphs, test_graphs = load_split_graphs()
 
-# Normalization stats from TRAIN ONLY (y is already log10(K) from
-# build_graphs_and_splits.py — this z-scores the log target for training
-# stability, same approach as the CGCNN baseline).
 train_y = torch.cat([g.y.view(-1) for g in train_graphs]).float()
 y_mean = train_y.mean()
 y_std = train_y.std()
@@ -154,10 +122,6 @@ y_std = train_y.std()
 for g in train_graphs + val_graphs + test_graphs:
     g.y_scaled = ((g.y.float() - y_mean) / y_std).view(-1)
 
-
-# ============================================================
-# 3. Sweep config
-# ============================================================
 sweep_config = {
     "method": "bayes",
     "metric": {"name": "val_loss", "goal": "minimize"},
@@ -181,10 +145,6 @@ sweep_config = {
     },
 }
 
-
-# ============================================================
-# 4. Training function (sweeps against VAL only — test untouched)
-# ============================================================
 def run_epoch(model, loader, device, criterion, optimizer=None):
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
@@ -223,7 +183,6 @@ def run_epoch(model, loader, device, criterion, optimizer=None):
         return None, None, skipped_nan
     return total_loss / total_n, total_mae / total_n, skipped_nan
 
-
 def train():
     with wandb.init() as run:
         config = wandb.config
@@ -235,7 +194,7 @@ def train():
         in_node_dim = train_graphs[0].x.size(1)
         edge_dim = train_graphs[0].edge_attr.size(1)
 
-        model = GATBulkModulus(config, in_node_dim=in_node_dim, edge_dim=edge_dim).to(device)
+        model = GATBulkModulus(config, in_node_dim=in_node_dim, in_edge_dim=edge_dim).to(device)
         optimizer = optim.Adam(model.parameters(), lr=config.learning_rate,
                                 weight_decay=config.weight_decay)
         criterion = nn.MSELoss()
@@ -281,11 +240,10 @@ def train():
             wandb.save(ckpt_path)
             os.remove(ckpt_path)
 
-
 if __name__ == "__main__":
     sweep_id = wandb.sweep(
         sweep=sweep_config,
         entity="88-eateatyumm-imperial-college-london",
-        project="MaterialMind_GNN",
+        project="GAT_sweep",
     )
-    wandb.agent(sweep_id, function=train, count=40)
+    wandb.agent(sweep_id, function=train, count=30)

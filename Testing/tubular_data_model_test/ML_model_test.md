@@ -7,47 +7,44 @@ Baseline_comparison.py : aim to find better dataset combination and model (linea
 hyperparameter_tuning.py : find good hyperparameter combination using wandb
 
 Hist_test.py : testing the hist model with test dataset.
----
-
-## Dataset & Split Strategy
-
-The data ingestion pipeline splits the material records into strict, non-overlapping holdout sets based on `material_id`:
-* **Feature Sets:**
-  1. **Composition-Only (`comp`):** Magpie elemental features derived strictly from chemical formulas.
-  2. **Composition + Structure (`comp_den`):** Magpie elemental features combined with physical density and structural properties.
-* **Target Variable:** `log_bulk_modulus_vrh` (log-transformed to stabilize right-skewed physical values and equalize relative loss errors).
 
 ---
-
+# Baseline_compariosn.py
 ## Model Comparison Results
 
-Models were evaluated using 5-fold cross-validation on the training set, followed by evaluation on the validation split.
+=== Composition-Only Baseline Comparison ===
+Model                          CV RMSE  CV MAE   CV R²
+1. Dummy Baseline (Mean)       0.381   0.299 -0.0552
+2. Scaled Linear (Ridge)       0.197   0.130  0.7145
+3. Random Forest               0.158   0.089  0.8176
+4. Gradient Boosting (Hist)    0.154   0.089  0.8282
+5. XGBoost                     0.161   0.091  0.8136
 
-### 1. Composition-Only Baseline (`comp`)
+=== VALIDATION SET PERFORMANCE (COMP) ===
+Model: 4. Gradient Boosting (Hist)
+Val RMSE: 0.133 (Log Scale)
+Val MAE:  0.077 (Log Scale)
+Val R²:   0.8895
 
-| Model                     | CV RMSE (Log) | CV MAE (Log) | CV $R^2$　 | Validation $R^2$ |
-| **Dummy Baseline (Mean)** | 0.350         | 0.275        | -0.0482    | —                |
-| **Scaled Linear (Ridge)** | 0.158         | 0.105        | 0.7815     | —                |
-| **Random Forest**         | 0.123         | 0.072        | 0.8661     | —                |
-| **HistGradientBoosting**  | **0.117**     | **0.068**    | **0.8807** | **0.8925**       |
+--- TOP 10 LARGEST PREDICTION FAILURES ---
+      Actual_Log_Bulk_Modulus  Predicted_Log_Bulk_Modulus  Absolute_Error  Residual
+9041                 0.303628                    1.365423        1.061796 -1.061796
+3438                 1.954088                    0.951258        1.002830  1.002830
+9057                -0.283162                    0.652670        0.935833 -0.935833
+9453                -0.036684                    0.876578        0.913263 -0.913263
+8646                 0.775538                    1.673748        0.898210 -0.898210
+8773                -0.007446                    0.863065        0.870512 -0.870512
+276                  1.745059                    0.987127        0.757933  0.757933
+5098                 0.739414                    1.495588        0.756174 -0.756174
+9013                 1.198135                    1.928422        0.730288 -0.730288
+6533                 0.978226                    1.706871        0.728645 -0.728645
 
-### 2. Composition + Structure Baseline (`comp_den`)
-
-| Model                     | CV RMSE (Log) | CV MAE (Log) | CV $R^2$ 　| Validation $R^2$ |
-| **Dummy Baseline (Mean)** | 0.350         | 0.275        | -0.0482    | — 　　　　　　　　|
-| **Scaled Linear (Ridge)** | 0.120         | 0.080        | 0.8733     | — 　　　　　　　　|
-| **Random Forest**         | 0.104         | 0.063        | 0.9033     | — 　　　　　　　　|
-| **HistGradientBoosting**  | **0.095**     | **0.056**    | **0.9196** | **0.9277** 　　　|
-
----
 
 ## Key Insights
 
-* **Density Impact:** Incorporating physical density boosted model accuracy significantly, raising the top $R^2$ score from **0.8925** to **0.9277** and dropping log Validation MAE from **0.061** to **0.050**.
+
 * **Model Champion:** `HistGradientBoostingRegressor` outperforms linear models and Random Forests across all metrics.
 * **Residual Analysis:** Error distributions show tight, zero-centered residual peaks. Main prediction failures occur on extreme low-modulus outliers, where tree models tend to over-predict due to sparse training samples at boundaries.
-
----
 
 ## How to Run
 
@@ -55,30 +52,38 @@ Execute the baseline comparison script from the project root:
 
 ```bash
 python Testing/tubular_data_model_test/Baseline_comparison.py
-
+```
+# hyperparameter_tuning.py
 
 ===================hyperparameter tuning result=====================
 
-wandb:  l2_regularization: 0.0027333622120007876
-wandb:  learning_rate: 0.26225955885339747
-wandb:  max_depth: 3
-wandb:  max_iter: 500
-wandb:  max_leaf_nodes: 63
-wandb:  min_samples_leaf: 50
+better model: 
 
-wandb: Run summary:
-wandb: n_estimators_used 271
-wandb:           val_mae 0.05425
-wandb:            val_r2 0.92983
-wandb:          val_rmse 0.09366
+    learning_rate=0.25008566386849446,
+    l2_regularization=0.028004521423582184,
+    max_depth=7,
+    max_iter=500,
+    max_leaf_nodes=15,
+    min_samples_leaf=5,
+    random_state=42,
+    early_stopping=True,
+    validation_fraction=0.15,
+    n_iter_no_change=15,
+
+# Hist_test.py 
 
 ===================test result=====================
 
-=== FINAL TEST SET PERFORMANCE (log10 GPa) — HistGB comp+density ===
-Test RMSE: 0.0879
-Test MAE:  0.0556
-Test R²:   0.9358
+Feature set: 132 columns 
+train: 7021, test: 1488
+
+=== FINAL TEST SET PERFORMANCE (log10 GPa) — HistGB composition only ===
+Test RMSE: 0.1296
+Test MAE:  0.0768
+Test R²:   0.8838
 
 === LOW-K SUBSET (K < 3.0 GPa, log10(K) < 0.4771) ===
-Low-K subset (n=3): MAE=0.1365, RMSE=0.2162
-K >= 3 GPa subset (n=748): MAE=0.0553, RMSE=0.0870
+Low-K subset (n=5): MAE=0.5842, RMSE=0.6674
+K >= 3 GPa subset (n=1483): MAE=0.0751, RMSE=0.1239
+
+

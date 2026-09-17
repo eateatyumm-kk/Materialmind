@@ -1,20 +1,4 @@
-"""
-Final training + evaluation for the GAT bulk modulus model, using the
-winning sweep config (cosmic-sweep-5).
 
-This script:
-  1. Retrains on train+val split, tracking the BEST validation checkpoint
-     by loss (not the final epoch — the sweep report explicitly showed
-     several runs drift upward after their best point).
-  2. Loads that best checkpoint and evaluates ONCE on the held-out test
-     set (data/splits/test_ids.csv) — this test set has never been touched
-     by any sweep run.
-  3. Extracts and saves the GNN's graph embedding for every material
-     (train + val + test) for later use in the hybrid tabular+GNN model.
-
-Run this once you've stopped the sweep and confirmed cosmic-sweep-5 (or
-whichever run you pick) as the winner.
-"""
 from pathlib import Path
 
 import numpy as np
@@ -27,10 +11,6 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.nn import TransformerConv, global_mean_pool
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-
-# ============================================================
-# 0. Locate project root robustly (avoids the earlier .parent.parent bug)
-# ============================================================
 def find_project_root(marker="data"):
     current = Path(__file__).resolve().parent
     while current != current.parent:
@@ -39,60 +19,55 @@ def find_project_root(marker="data"):
         current = current.parent
     raise FileNotFoundError(f"Could not find a '{marker}' directory above {__file__}")
 
-
 PROJECT_ROOT = find_project_root()
 DATA_DIR = PROJECT_ROOT / "data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
-# ============================================================
-# 1. Winning config from the sweep report (cosmic-sweep-5)
-#    Picked because it wins best_val_loss (0.1200) AND is second-best on
-#    MAE (0.0820, close behind devout-sweep-4's 0.0767), with the smallest
-#    model and shortest runtime of any leading candidate.
-# ============================================================
 class Config:
-    learning_rate = 0.0025575
-    batch_size = 16
-    hidden_dim = 32
-    fc_hidden = 32
+    learning_rate = 0.0001428170203496466
+    batch_size = 64
+    hidden_dim = 64
+    fc_hidden = 128
     num_heads = 8
-    dropout = 0.0
-    attn_dropout = 0.2
-    weight_decay = 0.000022451
+    dropout = 0.1
+    attn_dropout = 0
+    weight_decay = 0.000029904296072567457
     epochs = 300
-    patience = 40  # slightly relaxed from the sweep's 30, given the
-                   # confirmed noisy-but-still-improving val loss pattern
-
+    patience = 30 
 
 config = Config()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
+class GaussianRBF(nn.Module):
+    def __init__(self, start=0.0, stop=8.0, num_gaussians=16):
+        super().__init__()
+        self.offset = torch.linspace(start, stop, num_gaussians)
+        self.coeff = -0.5 / ((stop - start) / num_gaussians) ** 2
 
-# ============================================================
-# 2. Model (identical architecture to the sweep script)
-# ============================================================
+    def forward(self, dist):
+        dist = dist.unsqueeze(1)
+
+        return torch.exp(
+            self.coeff * (dist - self.offset.to(dist.device)) ** 2
+        )
+
 class GATBulkModulus(nn.Module):
-    def __init__(self, config, in_node_dim=3, edge_dim=1):
+    def __init__(self, config, in_node_dim=6, in_edge_dim=2):
         super().__init__()
         self.num_heads = config.num_heads
         hidden = config.hidden_dim
 
+        self.rbf = GaussianRBF(start=0.0, stop=8.0, num_gaussians=16)
+        rbf_edge_dim = 17 if in_edge_dim == 2 else in_edge_dim
+
         self.node_embed = nn.Linear(in_node_dim, hidden)
 
-        self.conv1 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
-        self.conv2 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
-        self.conv3 = TransformerConv(
-            hidden, hidden // self.num_heads, heads=self.num_heads,
-            edge_dim=edge_dim, dropout=config.attn_dropout, concat=True,
-        )
+        head_dim = hidden // self.num_heads
+        self.conv1 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
+        self.conv2 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
+        self.conv3 = TransformerConv(hidden, head_dim, heads=self.num_heads, edge_dim=rbf_edge_dim, concat=True)
 
         self.norm1 = nn.LayerNorm(hidden)
         self.norm2 = nn.LayerNorm(hidden)
@@ -109,9 +84,17 @@ class GATBulkModulus(nn.Module):
             data.x.float(), data.edge_index, data.edge_attr.float(), data.batch
         )
 
+        distance = edge_attr[:, 0]
+        other_feature = edge_attr[:, 1]
+        
+        rbf_distance = self.rbf(distance)
+        
+        edge_attr = torch.cat([rbf_distance, other_feature.unsqueeze(1)], dim=1)
+
         x = F.relu(self.node_embed(x))
         x = self.dropout(x)
 
+        # Residual Blocks
         h = self.conv1(x, edge_index, edge_attr)
         x = self.norm1(x + F.relu(h))
         x = self.dropout(x)
@@ -123,26 +106,22 @@ class GATBulkModulus(nn.Module):
         h = self.conv3(x, edge_index, edge_attr)
         x = self.norm3(x + F.relu(h))
 
-        graph_embedding = global_mean_pool(x, batch)
-        return graph_embedding
+        return global_mean_pool(x, batch)
 
     def forward(self, data):
         graph_embedding = self._graph_embedding(data)
+
         h = F.relu(self.fc1(graph_embedding))
         h = self.dropout(h)
         h = F.relu(self.fc2(h))
-        return self.fc_out(h).view(-1)
+        out = self.fc_out(h).view(-1) #to match the shape with y [[1], [2], [3]] -> [1, 2, 3]
+        return out
 
     @torch.no_grad()
     def extract_embedding(self, data):
         self.eval()
         return self._graph_embedding(data)
 
-
-# ============================================================
-# 3. Load data — same shared splits as the sweep, test held out entirely
-#    until the final evaluation step below.
-# ============================================================
 def load_split_graphs():
     graphs = torch.load(DATA_DIR / "graphs.pt", weights_only=False)
 
@@ -158,20 +137,16 @@ def load_split_graphs():
     return graphs, train_graphs, val_graphs, test_graphs
 
 
-all_graphs, train_graphs, val_graphs, test_graphs = load_split_graphs()
+all_graphs, train_graphs, val_graphs, test_graphs = load_split_graphs() 
+#train, val, and test is connected to same all graph object so updating all graph updates the connected object too.
 
-# Normalization stats from TRAIN ONLY (y is already log10(K))
 train_y = torch.cat([g.y.view(-1) for g in train_graphs]).float()
 y_mean = train_y.mean()
 y_std = train_y.std()
 
 for g in all_graphs:
-    g.y_scaled = ((g.y.float() - y_mean) / y_std).view(-1)
+    g.y_scaled = ((g.y.float() - y_mean) / y_std).view(-1) #normalise y and store in g.y_scaled for training and evaluation
 
-
-# ============================================================
-# 4. Train, tracking the BEST checkpoint by val_loss
-# ============================================================
 def run_epoch(model, loader, criterion, optimizer=None):
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
@@ -208,7 +183,6 @@ def run_epoch(model, loader, criterion, optimizer=None):
         return None, None
     return total_loss / total_n, total_mae / total_n
 
-
 def train_final_model():
     train_loader = DataLoader(train_graphs, batch_size=config.batch_size, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_graphs, batch_size=config.batch_size, shuffle=False, num_workers=0)
@@ -216,7 +190,7 @@ def train_final_model():
     in_node_dim = train_graphs[0].x.size(1)
     edge_dim = train_graphs[0].edge_attr.size(1)
 
-    model = GATBulkModulus(config, in_node_dim=in_node_dim, edge_dim=edge_dim).to(device)
+    model = GATBulkModulus(config, in_node_dim=in_node_dim, in_edge_dim=edge_dim).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate,
                             weight_decay=config.weight_decay)
     criterion = nn.MSELoss()
@@ -263,10 +237,6 @@ def train_final_model():
     model.load_state_dict(torch.load(ckpt_path, weights_only=True))
     return model
 
-
-# ============================================================
-# 5. Final test evaluation — the ONLY time test data is touched
-# ============================================================
 def evaluate_on_test(model):
     test_loader = DataLoader(test_graphs, batch_size=config.batch_size, shuffle=False)
 
@@ -311,11 +281,6 @@ def evaluate_on_test(model):
 
     return results_df
 
-
-# ============================================================
-# 6. Extract embeddings for ALL materials (train+val+test) — this is the
-#    hand-off point for the hybrid tabular+GNN model.
-# ============================================================
 def extract_all_embeddings(model):
     loader = DataLoader(all_graphs, batch_size=64, shuffle=False)
 
@@ -330,9 +295,6 @@ def extract_all_embeddings(model):
             all_ids.extend(batch.material_id if isinstance(batch.material_id, list)
                             else [batch.material_id])
 
-    # PyG batches list-type attributes (like material_id strings) inconsistently
-    # across versions, so rebuild the id list directly from all_graphs instead —
-    # this guarantees correct row order matching all_embeddings' concatenation.
     all_ids = [g.material_id for g in all_graphs]
     all_embeddings = np.concatenate(all_embeddings, axis=0)
 
@@ -345,7 +307,6 @@ def extract_all_embeddings(model):
     print(f"\nSaved {emb_df.shape[0]} embeddings ({emb_df.shape[1]-1} dims each) to {emb_path}")
 
     return emb_df
-
 
 if __name__ == "__main__":
     model = train_final_model()

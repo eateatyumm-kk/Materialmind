@@ -1,0 +1,2 @@
+model,feature_set,split,rmse,mae,r2,mean_gate,std_gate
+Hybrid-FiLM-Gated-GAT,graph+tabular,test,0.09783206372328097,0.05158310383558273,0.9338299036026001,0.4904055,0.04162606

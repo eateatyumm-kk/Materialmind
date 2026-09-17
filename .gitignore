@@ -13,3 +13,7 @@ __pycache__/
 # Weights & Biases
 wandb/
 *.wandb
+
+# data
+data/
+results/
