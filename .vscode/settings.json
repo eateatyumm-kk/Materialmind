@@ -1,9 +1,0 @@
-{
-    "python-envs.pythonProjects": [
-        {
-            "path": "Titanic-ML_project",
-            "envManager": "ms-python.python:system",
-            "packageManager": "ms-python.python:pip"
-        }
-    ]
-}

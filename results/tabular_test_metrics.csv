@@ -1,4 +1,0 @@
-model,feature_set,subset,n,rmse,mae,r2
-HistGB,composition only,overall,1488,0.12964042820594765,0.07677572368990525,0.8838068769590453
-HistGB,composition only,low_K_(<3.0GPa),5,0.667352430948865,0.5842466534502945,
-HistGB,composition only,high_K_(>=3.0GPa),1483,0.12394255329507697,0.07506476303663352,
