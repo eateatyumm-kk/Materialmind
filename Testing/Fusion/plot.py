@@ -17,7 +17,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
-df = pd.read_csv(RESULTS_DIR / "Fusion_test_predictions_seed42.csv")
+df = pd.read_csv(RESULTS_DIR / "Fusion_test_predictions_seed456.csv")
 
 y_test_arr = df["actual_log_K"].values
 y_pred = df["predicted_log_K"].values

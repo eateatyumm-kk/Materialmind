@@ -14,7 +14,6 @@ from torch_geometric.nn import TransformerConv, global_mean_pool
 import random
 
 
-
 def find_project_root(marker="data"):
     current = Path(__file__).resolve().parent
     while current != current.parent:
@@ -45,6 +44,15 @@ class Config:
 config = Config()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
+
+# --- Subgroup thresholds ---
+# Fixed physical threshold (soft/extreme materials), PLUS percentile-based
+# thirds (bottom 20% / middle 60% / top 20% by actual log-K), computed
+# from the test set's own distribution — same convention as
+# `Testing/hybrid model test v1/multi_random_seed_test.py` so Fusion's
+# error breakdown is directly comparable to Magpie/GNN/raw-Hybrid.
+EXTREME_LOW_K_GPA = 3.0
+EXTREME_LOW_K_LOG = np.log10(EXTREME_LOW_K_GPA)
 
 def set_seed(seed):
     random.seed(seed)
@@ -472,11 +480,66 @@ def evaluate_on_test(model, seed):
 
     return results_df
 
+
+# ============================================================
+# SUBGROUP ANALYSIS
+# ============================================================
+def subgroup_analysis(pred_df):
+    """Bottom 20% / middle 60% / top 20% by ACTUAL log-K (computed from
+    the test set's own distribution, not a hardcoded constant), plus the
+    fixed physical extreme-low-K cutoff (<3 GPa) as a separate, smaller
+    diagnostic slice. Mirrors the subgroup analysis in
+    `Testing/hybrid model test v1/multi_random_seed_test.py`."""
+    rows = []
+
+    for model_name in pred_df["model"].unique():
+        model_df = pred_df[pred_df["model"] == model_name]
+
+        y_true_by_material = model_df.groupby("material_id")["y_true"].mean()
+        p20 = y_true_by_material.quantile(0.20)
+        p80 = y_true_by_material.quantile(0.80)
+
+        for seed in model_df["seed"].unique():
+            seed_df = model_df[model_df["seed"] == seed].copy()
+
+            seed_df["subgroup_pct"] = np.select(
+                [seed_df["y_true"] <= p20,
+                 seed_df["y_true"] >= p80],
+                ["bottom_20pct_lowK", "top_20pct_highK"],
+                default="middle_60pct",
+            )
+            seed_df["is_extreme_low_k"] = seed_df["y_true"] < EXTREME_LOW_K_LOG
+
+            for subgroup, group in seed_df.groupby("subgroup_pct"):
+                rows.append({
+                    "model": model_name, "seed": seed, "subgroup": subgroup,
+                    "n": len(group),
+                    "mae": mean_absolute_error(group["y_true"], group["y_pred"]),
+                    "rmse": np.sqrt(mean_squared_error(group["y_true"], group["y_pred"])),
+                })
+
+            extreme = seed_df[seed_df["is_extreme_low_k"]]
+            if len(extreme) > 0:
+                rows.append({
+                    "model": model_name, "seed": seed,
+                    "subgroup": f"extreme_low_K_(<{EXTREME_LOW_K_GPA}GPa)",
+                    "n": len(extreme),
+                    "mae": mean_absolute_error(extreme["y_true"], extreme["y_pred"]),
+                    "rmse": np.sqrt(mean_squared_error(extreme["y_true"], extreme["y_pred"])),
+                })
+
+    subgroup_df = pd.DataFrame(rows)
+    print("\n=== SUBGROUP ANALYSIS (mean across seeds) ===")
+    print(subgroup_df.groupby(["model", "subgroup"])[["mae", "rmse", "n"]].mean().to_string())
+    return subgroup_df
+
+
 if __name__ == "__main__":
 
     seeds = [42, 123, 456, 789, 2024]
 
     all_results = []
+    all_predictions = []
 
     for seed in seeds:
 
@@ -498,6 +561,15 @@ if __name__ == "__main__":
             "MAE": mae,
             "R2": r2,
         })
+
+        for mat_id, yt, yp, res in zip(
+            results_df["material_id"], results_df["actual_log_K"],
+            results_df["predicted_log_K"], results_df["residual"],
+        ):
+            all_predictions.append({
+                "model": "Fusion", "seed": seed, "material_id": mat_id,
+                "y_true": yt, "y_pred": yp, "residual": res,
+            })
 
     # --------------------------------------------------------
     # SUMMARY
@@ -544,3 +616,12 @@ if __name__ == "__main__":
     print("\nSaved:")
     print(RESULTS_DIR / "Fusion_5seed_results.csv")
     print(RESULTS_DIR / "Fusion_5seed_summary.csv")
+
+    # --------------------------------------------------------
+    # SUBGROUP ANALYSIS (mean across seeds)
+    # --------------------------------------------------------
+    pred_df = pd.DataFrame(all_predictions)
+    subgroup_df = subgroup_analysis(pred_df)
+    subgroup_df.to_csv(RESULTS_DIR / "Fusion_subgroup_analysis.csv", index=False)
+
+    print(RESULTS_DIR / "Fusion_subgroup_analysis.csv")

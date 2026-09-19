@@ -1,0 +1,18 @@
+# Runtime dependencies for Fusion_service/app only (direct deps pinned; pip resolves transitives).
+# Deliberately independent of the repo-root requirements.txt, which is a full `pip freeze` for Testing/.
+#
+# torch: no local version tag on purpose, so `==2.5.1` matches both `2.5.1+cpu` (CI/Docker) and
+# `2.5.1+cu121` (local GPU venv). Install the CPU wheel first when you don't need CUDA:
+#   pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
+torch-geometric==2.8.0.post1
+pymatgen==2026.5.4
+matminer==0.10.1
+numpy==2.5.3
+pandas==2.3.3
+# Exact pin: the shipped StandardScaler pickle is scikit-learn-version sensitive.
+scikit-learn==1.9.1
+fastapi==0.141.1
+pydantic==2.13.5
+python-multipart==0.0.32
+uvicorn==0.53.0
