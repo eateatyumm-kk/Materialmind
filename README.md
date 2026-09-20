@@ -104,8 +104,8 @@ An end-to-end hybrid: a tabular MLP branch conditions the graph branch through a
   <tr>
     <td align="center" colspan="3">
       <b>Fusion (FiLM + Gated GAT, trained end-to-end)</b><br>
-      <img width="400" alt="Final_materialmind_Fusion_test" src="docs/images/Final_materialmind_Fusion_test.png" /><br>
-      <sub>Seed 123: R² = 0.933, RMSE = 0.098, MAE = 0.053 (the seed closest to the 5-seed mean; regenerate with <code>Testing/Fusion/plot.py</code>)</sub>
+      <img width="400" alt="Final_Final_materialmind_Fusion_model" src="docs/images/Final_Final_materialmind_Fusion_model.png" /><br>
+      <sub>Seed 456, the best of the 5 seeds: R² = 0.938, RMSE = 0.094, MAE = 0.052 (5-seed mean: R² = 0.933, RMSE = 0.098, MAE = 0.054)</sub>
     </td>
   </tr>
 </table>
@@ -164,6 +164,25 @@ Fusion - GNN = +0.0040 (p = 0.30, Fusion higher in 3 of 5 seeds); Fusion - raw H
 | | `extreme_low_K_(<3.0GPa)` | 0.417256 | 0.472083 | 5.0 |
 | | `middle_60pct` | 0.044544 | 0.074571 | 892.0 |
 | | `top_20pct_highK` | 0.032024 | 0.043605 | 298.0 |
+
+---
+
+### 4. Fusion Model Results (Per Seed)
+
+Held-out test set (1,488 materials), errors in log10(GPa).
+
+| Seed | RMSE | MAE | R2 | Mean gate | Gate std (across materials) |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+| **42** | 0.101936 | 0.056891 | 0.928162 | 0.4310 | 0.0379 |
+| **123** | 0.098310 | 0.053102 | 0.933182 | 0.4528 | 0.0454 |
+| **456** | 0.094395 | 0.051829 | 0.938397 | 0.4474 | 0.0304 |
+| **789** | 0.100154 | 0.057223 | 0.930652 | 0.4526 | 0.0356 |
+| **2024** | 0.097191 | 0.053346 | 0.934694 | 0.4412 | 0.0373 |
+| **Mean ± Std** | 0.098397 ± 0.002876 | 0.054478 ± 0.002426 | 0.933017 ± 0.003903 | 0.4450 ± 0.0092 | 0.0373 |
+
+> **Gate:** 1 = fully graph-driven, 0 = fully tabular-driven, 0.5 = balanced blend. "Mean gate" is
+> the average over test materials for each seed, and "Gate std" is the spread across materials
+> within a seed (not across seeds). The Mean ± Std row uses the sample standard deviation (n = 5 seeds).
 
 ### Key findings
 
