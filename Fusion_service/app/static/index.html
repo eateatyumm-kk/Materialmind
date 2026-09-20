@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>MaterialMind · Bulk modulus predictor</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f5bea'/%3E%3Cpath d='M16 6l9 10-9 10-9-10z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true">◆</span> MaterialMind</div>
+    <nav class="topbar-right" aria-label="Service">
+      <span id="status" class="pill" data-state="loading">Connecting…</span>
+      <a class="link" href="/docs">API docs</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Predict a material's bulk modulus</h1>
+      <p>Enter a chemical formula and upload the crystal structure as a CIF file. A 5-model Fusion GNN
+        ensemble returns the bulk modulus with an uncertainty estimate.</p>
+    </section>
+
+    <div class="layout">
+      <form id="predict-form" class="card" novalidate>
+        <h2><span class="step">1</span> Material</h2>
+
+        <label class="field-label" for="formula">Chemical formula</label>
+        <input id="formula" name="formula" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" placeholder="e.g. NaCl, Fe2O3, Li3PO4">
+
+        <span class="field-label" id="cif-label">Crystal structure (CIF)</span>
+        <label class="dropzone" id="dropzone">
+          <input id="cif-input" type="file" accept=".cif,text/plain" aria-labelledby="cif-label">
+          <span class="dz-icon" aria-hidden="true">⬆</span>
+          <span class="dz-title">Drop a .cif file here</span>
+          <span class="dz-sub">or click to browse · up to 2&nbsp;MB</span>
+        </label>
+        <div id="file-chip" class="file-chip" hidden>
+          <span class="file-name" id="file-name"></span>
+          <span class="file-size" id="file-size"></span>
+          <button type="button" id="file-clear" class="icon-btn" aria-label="Remove file">✕</button>
+        </div>
+
+        <div class="examples">
+          <span class="examples-label">No CIF handy? Try an example:</span>
+          <div id="example-list" class="chips"></div>
+        </div>
+
+        <p id="form-hint" class="hint">The formula should describe the same material as the CIF file.</p>
+        <button id="submit" class="primary" type="submit" disabled>Predict bulk modulus</button>
+      </form>
+
+      <section id="results" class="card results" aria-live="polite" aria-labelledby="results-title">
+        <h2 id="results-title"><span class="step">2</span> Prediction</h2>
+
+        <div id="empty-state" class="empty">
+          <div class="empty-art" aria-hidden="true">◇</div>
+          <p>Your prediction will appear here.</p>
+        </div>
+
+        <div id="loading" class="loading" hidden>
+          <div class="skeleton wide"></div>
+          <div class="skeleton"></div>
+          <div class="skeleton tall"></div>
+          <p class="hint">Running 5 models…</p>
+        </div>
+
+        <div id="error" class="error" role="alert" hidden>
+          <strong id="error-title">Couldn't run the prediction</strong>
+          <pre id="error-detail"></pre>
+          <p id="error-hint" class="hint"></p>
+        </div>
+
+        <div id="result" hidden>
+          <div class="result-head">
+            <div class="formula-tag" id="r-formula"></div>
+            <div class="kvalue"><span id="r-k"></span><span class="unit">GPa</span></div>
+            <div class="krange">Ensemble range (±1σ) <b id="r-lower"></b> – <b id="r-upper"></b> GPa</div>
+          </div>
+
+          <dl class="stats">
+            <div><dt>log₁₀ K (mean)</dt><dd id="r-log-mean"></dd></div>
+            <div><dt>Spread σ (log₁₀)</dt><dd id="r-log-std"></dd></div>
+            <div><dt>Ensemble members</dt><dd id="r-size"></dd></div>
+          </dl>
+
+          <figure class="plot">
+            <svg id="r-plot" role="img" aria-label="Predictions of the individual ensemble members"></svg>
+            <figcaption>Dots: individual ensemble members · line: mean · shaded band: ±1σ (axis in GPa, log scale)</figcaption>
+          </figure>
+
+          <table class="members">
+            <caption class="sr-only">Prediction of each ensemble member</caption>
+            <thead><tr><th scope="col">Seed</th><th scope="col">log₁₀ K</th><th scope="col">K (GPa)</th></tr></thead>
+            <tbody id="r-members"></tbody>
+          </table>
+
+          <details class="note">
+            <summary>How should I read this uncertainty?</summary>
+            <p id="r-context"></p>
+            <p id="r-scope"></p>
+          </details>
+
+          <div class="actions">
+            <button type="button" id="copy-json" class="secondary">Copy JSON</button>
+            <span id="copy-status" class="hint" aria-live="polite"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    Predictions come from a research model trained on Materials Project DFT data. Treat them as estimates, not measurements.
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

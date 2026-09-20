@@ -18,6 +18,11 @@ from app.model import Config, HybridFiLMGatedGAT
 TARGET_MEAN = 1.8850252628326416
 TARGET_STD = 0.3802662193775177
 
+# Held-out test RMSE of the Fusion model in log10(GPa): mean over the 5 seeds, from
+# results/Fusion_5seed_summary.csv (RMSE_mean = 0.09840). Shown in the UI and /health so users can compare
+# the ensemble spread with the model's real error. Update this after retraining.
+REFERENCE_TEST_RMSE_LOG10 = 0.0984
+
 # What this uncertainty is and is not. Returned verbatim on every response
 # (see `uncertainty_scope` in schemas.py) so the semantics travel with the
 # number, not just in code comments.

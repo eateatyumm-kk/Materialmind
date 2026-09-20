@@ -1,14 +1,22 @@
-FROM python:3.10-slim
+# Build from inside Fusion_service/ (the build context must contain requirements.txt, app/ and weights/):
+#   cd Fusion_service
+#   docker build -t fusion-service -f dockerfile .
+#   docker run --rm -p 8000:8000 fusion-service      # then open http://localhost:8000/docs
+
+# 3.12 is required: numpy 2.5 needs Python >=3.12 (pymatgen / matminer / scikit-learn need >=3.11).
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
+# CPU-only torch first (the default PyPI wheel would pull multi-GB CUDA libraries). The version is read from
+# requirements.txt so it stays the single source of truth; the second install then sees torch as satisfied.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install "$(grep '^torch==' requirements.txt | tr -d '\r')" --index-url https://download.pytorch.org/whl/cpu \
+    && pip install -r requirements.txt
 
 COPY ./app ./app
 COPY ./weights ./weights

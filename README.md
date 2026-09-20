@@ -210,6 +210,13 @@ See `data ingestion/README.data_ingestion.md` for details.
 containerized via the included `dockerfile`. This is under active
 development.
 
+Run it with `cd Fusion_service && python -m uvicorn app.main:app`, then open:
+
+- **http://localhost:8000/** — web app: type a formula, drag in a CIF file (or click a built-in example),
+  and see the prediction with an ensemble-uncertainty plot.
+- **http://localhost:8000/docs** — interactive API documentation.
+- `GET /health` — service status and the model's reference test error.
+
 Predictions come from a **5-model deep ensemble** — the same 5
 independently-seeded checkpoints reported in the Results table above
 (`Fusion_best_model_seed{42,123,456,789,2024}.pth`), all run on the same
