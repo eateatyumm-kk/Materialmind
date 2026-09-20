@@ -101,6 +101,13 @@ An end-to-end hybrid: a tabular MLP branch conditions the graph branch through a
       <img width="400" alt="Final_materialmind_Hybrid_test" src="https://github.com/user-attachments/assets/7c45d386-5447-4c81-a7cd-3a0d35d78c20" />
     </td>
   </tr>
+  <tr>
+    <td align="center" colspan="3">
+      <b>Fusion (FiLM + Gated GAT, trained end-to-end)</b><br>
+      <img width="400" alt="Final_materialmind_Fusion_test" src="docs/images/Final_materialmind_Fusion_test.png" /><br>
+      <sub>Seed 123: R² = 0.933, RMSE = 0.098, MAE = 0.053 (the seed closest to the 5-seed mean; regenerate with <code>Testing/Fusion/plot.py</code>)</sub>
+    </td>
+  </tr>
 </table>
 
 ## Result Table

@@ -17,7 +17,11 @@ DATA_DIR = PROJECT_ROOT / "data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
-df = pd.read_csv(RESULTS_DIR / "Fusion_test_predictions_seed456.csv")
+# Seed 123 has the R2 closest to the 5-seed mean (seed 456 is the best seed, which would flatter Fusion).
+SEED = 123
+FIGURE_PATH = PROJECT_ROOT / "docs" / "images" / "Final_materialmind_Fusion_test.png"
+
+df = pd.read_csv(RESULTS_DIR / f"Fusion_test_predictions_seed{SEED}.csv")
 
 y_test_arr = df["actual_log_K"].values
 y_pred = df["predicted_log_K"].values
@@ -42,4 +46,6 @@ plt.title('Error Distribution', fontsize=12, fontweight='bold')
 plt.grid(True, linestyle='--', alpha=0.6)
 
 plt.tight_layout()
+FIGURE_PATH.parent.mkdir(parents=True, exist_ok=True)
+plt.savefig(FIGURE_PATH, dpi=150)
 plt.show()
